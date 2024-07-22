@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "bakery-ecommerce"
+version = "0.1.0"
+description = ""
+authors = ["romashorodok <108732029+romashorodok@users.noreply.github.com>"]
+readme = "README.md"
+packages = [{include = "bakery_ecommerce", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
