@@ -1,8 +1,8 @@
-"""create product table
+"""create inventory product table
 
-Revision ID: 623f8d4ed580
-Revises:
-Create Date: 2024-07-24 22:24:16.396364
+Revision ID: f8eca279b05e
+Revises: 623f8d4ed580
+Create Date: 2024-07-25 23:23:19.917716
 
 """
 
@@ -12,12 +12,12 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = "623f8d4ed580"
-down_revision: Union[str, None] = None
+revision: str = "f8eca279b05e"
+down_revision: Union[str, None] = "623f8d4ed580"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-table_name = "products"
+table_name = "inventory_products"
 
 
 def upgrade() -> None:
@@ -28,24 +28,32 @@ def upgrade() -> None:
             sa.UUID,
             primary_key=True,
             server_default=sa.text("gen_random_uuid()"),
-        ),
-        sa.Column(
-            "name",
-            sa.VARCHAR(30),
             nullable=False,
         ),
         sa.Column(
-            "created_at",
-            sa.TIMESTAMP(True),
-            server_default=sa.text("now()"),
+            "quantity_in_fridge",
+            sa.INT,
+            server_default="0",
             nullable=False,
         ),
         sa.Column(
-            "updated_at",
-            sa.TIMESTAMP(True),
-            server_default=sa.text("now()"),
+            "quantity_in_bakery",
+            sa.INT,
+            server_default="0",
             nullable=False,
         ),
+        sa.Column(
+            "quantity_baked",
+            sa.INT,
+            server_default="0",
+            nullable=False,
+        ),
+        sa.Column(
+            "product_id",
+            sa.UUID,
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(["product_id"], ["products.id"]),
     )
 
 
