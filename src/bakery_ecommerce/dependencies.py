@@ -1,5 +1,4 @@
 import contextlib
-from typing import Annotated
 import fastapi
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +29,7 @@ async def lifespan(_: fastapi.FastAPI):
 query_handlers = store.query.QueryProcessorHandlers(
     {
         store.crud_queries.CrudOperation: store.crud_queries.CrudOperationHandler,
+        store.crud_queries.CustomBuilder: store.crud_queries.CustomBuilderHandler,
         store.product_queries.FindProductByName: store.product_queries.FindProductByNameHandler,
     }
 )
@@ -40,7 +40,21 @@ def query_processor():
 
 
 def get_product_by_name(
-    session: AsyncSession = fastapi.Depends(session),
+    session: AsyncSession = fastapi.Depends(transaction),
     queries: store.query.QueryProcessor = fastapi.Depends(query_processor),
 ):
     yield product.GetProductByName(session, queries)
+
+
+def create_product(
+    session: AsyncSession = fastapi.Depends(session),
+    queries: store.query.QueryProcessor = fastapi.Depends(query_processor),
+):
+    yield product.CreateProduct(session, queries)
+
+
+def get_product_list(
+    session: AsyncSession = fastapi.Depends(session),
+    queries: store.query.QueryProcessor = fastapi.Depends(query_processor),
+):
+    yield product.GetProductList(session, queries)

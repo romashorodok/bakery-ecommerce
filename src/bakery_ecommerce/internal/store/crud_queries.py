@@ -8,6 +8,7 @@ from typing import (
 )
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import query
@@ -23,6 +24,28 @@ class IntegrityConflictException(Exception):
 
 class NotFoundException(Exception):
     pass
+
+
+CustomBuilder_T = TypeVar("AsyncCrudBuilder_T")
+
+
+class CustomBuilder(query.Query[CustomBuilder_T], Generic[CustomBuilder_T]):
+    def __init__(
+        self, fn: Callable[[AsyncSession], Coroutine[None, None, CustomBuilder_T]]
+    ) -> None:
+        self.fn = fn
+
+
+class CustomBuilderHandler(
+    query.QueryHandler[CustomBuilder[CustomBuilder_T], CustomBuilder_T]
+):
+    @override
+    def __init__(self, executor: AsyncSession) -> None:
+        self.__executor = executor
+
+    @override
+    async def handle(self, query: CustomBuilder) -> CustomBuilder_T:
+        return await query.fn(self.__executor)
 
 
 AsyncCrud_T = TypeVar("AsyncCrud_T")
@@ -47,13 +70,18 @@ class AsyncCrud(Generic[AsyncCrud_T]):
         result = await self.__session.execute(stmt)
         return result.scalar_one_or_none()
 
-    # async def get_many_by_field(self) -> list[AsyncCrud_T]: ...
-    #
-    # async def create(self) -> AsyncCrud_T: ...
-    #
-    # async def create_many(self) -> list[AsyncCrud_T]: ...
-    #
-    # async def remote_by_field(self) -> bool: ...
+    async def create_one(self, model: AsyncCrud_T) -> AsyncCrud_T:
+        try:
+            self.__session.add(model)
+            return model
+        except IntegrityError:
+            raise IntegrityConflictException(
+                f"{model.__tablename__} conflicts with existing data.",
+            )
+        except Exception as e:
+            raise SnippetException(f"Unknown error occurred: {e}") from e
+
+    async def remote_by_field(self, field: str = "id", value: Any = Any) -> bool: ...
 
 
 CrudQueryResult_T = TypeVar("CrudQueryResult_T")

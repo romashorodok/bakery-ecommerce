@@ -33,19 +33,16 @@ def upgrade() -> None:
         sa.Column(
             "quantity_in_fridge",
             sa.INT,
-            server_default="0",
             nullable=False,
         ),
         sa.Column(
             "quantity_in_bakery",
             sa.INT,
-            server_default="0",
             nullable=False,
         ),
         sa.Column(
             "quantity_baked",
             sa.INT,
-            server_default="0",
             nullable=False,
         ),
         sa.Column(
