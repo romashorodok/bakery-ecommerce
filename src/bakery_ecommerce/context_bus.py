@@ -22,17 +22,10 @@ class ContextExecutor(Generic[_HandlerReturn_T]):
     ) -> None:
         self.event_type = event_type
         self.handler = handler
-        self.task: asyncio.Task[_HandlerReturn_T] | None = None
-        self.result: _HandlerReturn_T | None = None
 
     def start(self, event: ContextEventProtocol, loop: asyncio.AbstractEventLoop):
         self.task = loop.create_task(self.handler(event.payload))
-
-    async def wait(self):
-        if not self.task:
-            return
-        self.result = await self.task
-        return self.result
+        return self.task
 
 
 class ResultBox(Generic[_HandlerReturn_T]):
@@ -48,10 +41,10 @@ class ResultBox(Generic[_HandlerReturn_T]):
 
 class Result(Generic[_HandlerReturn_T]):
     def __init__(self, items: dict[str, list[ResultBox[_HandlerReturn_T]]]) -> None:
-        self.__items = items
+        self.items = items
 
     def flatten(self) -> list[ResultBox[_HandlerReturn_T]]:
-        flattened_list = [item for sublist in self.__items.values() for item in sublist]
+        flattened_list = [item for sublist in self.items.values() for item in sublist]
         return flattened_list
 
 
@@ -59,44 +52,49 @@ class Result(Generic[_HandlerReturn_T]):
 # Error Handling: Implement error handling to trigger compensating actions and manage the overall state of the Saga.
 # TODO: use NATS based
 class ContextBus(Generic[_HandlerReturn_T]):
-    def __init__(self, executors: list[ContextExecutor[_HandlerReturn_T]]) -> None:
+    def __init__(
+        self, executors: dict[str, list[ContextExecutor[_HandlerReturn_T]]]
+    ) -> None:
         self.__executors = executors
-        self.__tasks = asyncio.Queue[ContextExecutor[_HandlerReturn_T]]()
+        self.__tasks = asyncio.Queue[tuple[str, list[asyncio.Task[_HandlerReturn_T]]]]()
         self.__lock = asyncio.Lock()
 
     async def publish(self, event: ContextEventProtocol):
+        event_type_str = str(type(event))
         async with self.__lock:
-            loop = asyncio.get_running_loop()
-            event_type = type(event)
-            for executor in self.__executors:
-                if event_type is executor.event_type:
-                    executor.start(event, loop)
-                    await self.__tasks.put(executor)
+            if executors := self.__executors.get(event_type_str):
+                tasks = list[asyncio.Task[_HandlerReturn_T]]()
+                for executor in executors:
+                    tasks.append(executor.start(event, asyncio.get_running_loop()))
+                await self.__tasks.put((event_type_str, tasks))
 
     async def gather(self) -> Result[_HandlerReturn_T]:
         results: dict[str, list[ResultBox[_HandlerReturn_T]]] = {}
 
-        while not self.__tasks.empty():
-            executors = list[ContextExecutor[_HandlerReturn_T]]()
+        while True:
+            event: tuple[str, list[asyncio.Task[_HandlerReturn_T]]] | None = None
+
             async with self.__lock:
-                while not self.__tasks.empty():
-                    executors.append(self.__tasks.get_nowait())
+                if not self.__tasks.empty():
+                    event = await self.__tasks.get()
 
-            if executors:
-                tasks = [e.wait() for e in executors]
-                completed_results = await asyncio.gather(*tasks)
+            if event:
+                event_type_str, tasks = event
+                try:
+                    completed = await asyncio.gather(*tasks)
+                except Exception as e:
+                    print(f"Exception occurred at event context bus: {e}")
+                    completed = []
 
-                for executor, result in zip(executors, completed_results):
-                    key = str(type(executor))
-                    # key = executor.event_type.__name__
+                if event_type_str not in results:
+                    results[event_type_str] = []
 
-                    if key not in results:
-                        results[key] = []
+                for result in completed:
+                    if result is not None:
+                        results[event_type_str].append(ResultBox(result))
 
-                    if result is None:
-                        continue
-
-                    results[key].append(ResultBox(result))
+            if self.__tasks.empty():
+                break
 
         return Result(results)
 

@@ -18,6 +18,8 @@ asyncpg = "^0.29.0"
 ruff = "^0.5.4"
 bakery_lib = { path = "./src/bakery_lib", develop = true }
 alembic = "^1.13.2"
+pytest = "^8.3.2"
+pytest-asyncio = "^0.23.8"
 
 [build-system]
 requires = ["poetry-core"]
