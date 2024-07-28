@@ -1,6 +1,9 @@
-from sqlalchemy import Column, ForeignKey
+from sqlalchemy import ForeignKey
 from sqlalchemy.types import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from uuid import UUID as BaseUUID
+
 from . import base
 
 
@@ -12,4 +15,6 @@ class InventoryProduct(base.PersistanceBase, base.ScalarID):
     quantity_baked: Mapped[int] = mapped_column(insert_default=0)
 
     product = relationship("Product")
-    product_id = Column(UUID, ForeignKey("products.id"))
+    product_id: Mapped[BaseUUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("products.id")
+    )

@@ -63,7 +63,6 @@ class DatabaseSessionManager:
         async with self.__session_maker.begin() as conn:
             try:
                 yield conn
-                conn.execute
             except Exception as e:
                 await conn.rollback()
                 raise e

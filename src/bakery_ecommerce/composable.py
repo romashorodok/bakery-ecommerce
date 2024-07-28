@@ -7,6 +7,10 @@ _COMPOSABLE_ITEM_T = TypeVar("_COMPOSABLE_ITEM_T")
 _REDUCEABLE_UNION_T = TypeVar("_REDUCEABLE_UNION_T", covariant=True)
 
 
+def set_key(source: dict[str, Any], key: str, value: Any):
+    source[key] = value
+
+
 class ReduceableProtocol(Protocol[_REDUCEABLE_UNION_T]):
     def value(self) -> _REDUCEABLE_UNION_T: ...
 

@@ -53,11 +53,26 @@ class Result(Generic[_HandlerReturn_T]):
 # TODO: use NATS based
 class ContextBus(Generic[_HandlerReturn_T]):
     def __init__(
-        self, executors: dict[str, list[ContextExecutor[_HandlerReturn_T]]]
+        self,
+        executors: dict[str, list[ContextExecutor[_HandlerReturn_T]]] | None = None,
     ) -> None:
-        self.__executors = executors
+        if executors:
+            self.__executors = executors
+        else:
+            self.__executors = dict[str, list[ContextExecutor[_HandlerReturn_T]]]()
+
         self.__tasks = asyncio.Queue[tuple[str, list[asyncio.Task[_HandlerReturn_T]]]]()
         self.__lock = asyncio.Lock()
+
+    def add_executor(
+        self, for_event: _HandlerReturn_T, executor: ContextExecutor[_HandlerReturn_T]
+    ):
+        event_type_str = str(for_event)
+
+        if not self.__executors.get(event_type_str):
+            self.__executors[event_type_str] = list[ContextExecutor[_HandlerReturn_T]]()
+
+        self.__executors[event_type_str].append(executor)
 
     async def publish(self, event: ContextEventProtocol):
         event_type_str = str(type(event))
@@ -85,6 +100,7 @@ class ContextBus(Generic[_HandlerReturn_T]):
                 except Exception as e:
                     print(f"Exception occurred at event context bus: {e}")
                     completed = []
+                    raise e
 
                 if event_type_str not in results:
                     results[event_type_str] = []
