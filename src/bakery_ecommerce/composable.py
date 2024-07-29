@@ -33,7 +33,9 @@ class Composable(Generic[_COMPOSABLE_CONTEXT_T]):
         for item in items:
             item_value = item.value()
             item_type = type(item_value)
-            fn = self.__reducers[item_type]
+            fn = self.__reducers.get(item_type)
             if fn:
                 fn(self.__root, item_value)
+            else:
+                print(f"Not found key={item_type} in Composable. Ignore the key")
         return self.__root

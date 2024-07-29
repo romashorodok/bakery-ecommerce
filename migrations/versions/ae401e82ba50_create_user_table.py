@@ -45,10 +45,11 @@ def upgrade() -> None:
             "email",
             sa.VARCHAR(255),
             nullable=False,
+            unique=True,
         ),
         sa.Column(
-            "password",
-            sa.VARCHAR(36),
+            "hash",
+            sa.VARCHAR(60),
             nullable=False,
         ),
     )

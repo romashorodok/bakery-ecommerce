@@ -12,6 +12,8 @@ fastapi = "^0.111.1"
 sqlalchemy = "^2.0.31"
 bakery_lib = { path = "./src/bakery_lib", develop = false }
 asyncpg = "^0.29.0"
+joserfc = "^1.0.0"
+bcrypt = "^4.2.0"
 
 
 [tool.poetry.group.dev.dependencies]
