@@ -31,11 +31,11 @@ class PrivateKeyES256K1:
         )
         return cls(jwk.ECKey.import_key(pkey_pem))
 
-    def jwk_sign_message(self):
+    def sign_signature(self):
         return self.__keyset.keys[0].as_dict()
 
     def kid(self) -> str | None:
-        t = self.jwk_sign_message().get("kid")
+        t = self.sign_signature().get("kid")
         if isinstance(t, list):
             return t[0]
         return t
@@ -45,3 +45,6 @@ class PrivateKeyES256K1:
 
     def algorithm(self) -> str:
         return "ES256K"
+
+    def __repr__(self) -> str:
+        return f"PrivateKeyES256K1(__eckey={self.__eckey}, __keyset={self.__keyset})"

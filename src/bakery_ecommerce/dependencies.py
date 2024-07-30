@@ -15,6 +15,8 @@ from bakery_ecommerce.internal.store.session import (
 from bakery_ecommerce.internal.store import crud_queries
 from bakery_ecommerce.internal.store import product_queries
 
+import nats
+from nats.aio.client import Client as NATS
 
 REQUEST_ATTR_T = TypeVar("REQUEST_ATTR_T")
 
@@ -47,6 +49,18 @@ def request_transaction(
 async def session():
     async with session_manager.session() as session:
         yield session
+
+
+async def nats_session():
+    server = "nats://localhost:4222"
+    async with await nats.connect(server) as nc:
+        yield nc
+
+
+def request_nats_session(
+    request: fastapi.Request, nc: NATS = fastapi.Depends(nats_session)
+):
+    return cache_request_attr(request, nc)
 
 
 @contextlib.asynccontextmanager

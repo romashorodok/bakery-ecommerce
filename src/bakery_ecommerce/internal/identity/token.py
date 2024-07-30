@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any, Protocol, Self
 
-from joserfc import jwk, jwt
+from joserfc import jwk, jws, jwt
 
 
 class PrivateKeyProtocol(Protocol):
@@ -49,6 +49,10 @@ class Token:
             raise InvalidTokenError(e)
 
     @classmethod
+    def extract_signature_jws_from_text(cls, key: str):
+        return jws.extract_compact(key.encode())
+
+    @classmethod
     def verify_jws_from_text(cls, key: str, public_key: PrivateKeyProtocol) -> Self:
         try:
             jws_signature = jwt.decode(
@@ -87,6 +91,9 @@ class Token:
         The encode will use a public key to encrypt, and the decode will use a private key to decrypt.
         """
         raise NotImplementedError("Implement Token.sign_token_as_jwe")
+
+    def info(self) -> dict:
+        return {"claims": self.__claims, "headers": self.__headers}
 
     def add_token_use(self, token_use: TokenUse):
         self.__claims["token_use"] = str(token_use)
