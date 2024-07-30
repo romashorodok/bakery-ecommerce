@@ -78,28 +78,3 @@ def request_query_processor(
 
 def request_context_bus(request: fastapi.Request) -> ContextBus:
     return cache_request_attr(request, ContextBus())
-
-
-# def get_product_by_name(
-#     session: AsyncSession = fastapi.Depends(transaction),
-#     queries: QueryProcessor = fastapi.Depends(query_processor),
-# ):
-#     product.GetProductByName(session, queries)
-
-
-# def create_product(
-#     session: AsyncSession = fastapi.Depends(session),
-#     queries: QueryProcessor = fastapi.Depends(query_processor),
-# ):
-#     yield product.CreateProduct(session, queries)
-
-# def request_create_product(
-#     session: AsyncSession = fastapi.Depends(request)
-#     )
-
-
-# def get_product_list(
-#     session: AsyncSession = fastapi.Depends(session),
-#     queries: QueryProcessor = fastapi.Depends(query_processor),
-# ):
-#     yield product.GetProductList(session, queries)

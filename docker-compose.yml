@@ -10,3 +10,9 @@ services:
       - 5432:5432
     volumes:
       - "/var/lib/postgresql/data"
+  nats:
+    image: nats:2.10.18-alpine3.20
+    command:
+     - "-js"
+    ports:
+     - 4222:4222

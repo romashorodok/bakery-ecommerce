@@ -3,6 +3,7 @@ import fastapi
 from . import api_v1
 from . import dependencies
 
+
 app = fastapi.FastAPI(
     lifespan=dependencies.lifespan,
 )
