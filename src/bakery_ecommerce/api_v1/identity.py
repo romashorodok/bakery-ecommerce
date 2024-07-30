@@ -1,10 +1,10 @@
 from typing import Annotated, Any
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
-from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_404_NOT_FOUND, HTTP_422_UNPROCESSABLE_ENTITY
 
 from bakery_ecommerce import dependencies
 from bakery_ecommerce.composable import Composable, set_key
@@ -23,6 +23,104 @@ api = APIRouter()
 route = "/"
 
 
+def _login_request__context_bus(
+    context: ContextBus = Depends(dependencies.request_context_bus),
+    tx: AsyncSession = Depends(dependencies.request_transaction),
+    queries: QueryProcessor = Depends(dependencies.request_query_processor),
+) -> ContextBus:
+    validate_user_password = user_use_cases.ValidateUserPassword(context, tx, queries)
+    create_private_key = private_key_use_case.CreatePrivateKey(context, tx, queries)
+    create_access_token = token_use_case.CreateAccessToken()
+    create_refresh_token = token_use_case.CreateRefreshToken()
+
+    context.add_executor(
+        for_event=user_use_cases.ValidateUserPasswordEvent,
+        executor=ContextExecutor(
+            user_use_cases.ValidateUserPasswordEvent,
+            lambda e: validate_user_password.execute(e),
+        ),
+    )
+
+    context.add_executor(
+        for_event=user_use_cases.UserValidPasswordEvent,
+        executor=ContextExecutor(
+            user_use_cases.UserValidPasswordEvent,
+            lambda e: create_private_key.execute(
+                private_key_use_case.CreatePrivateKeyEvent(
+                    user_id=e.user.id,
+                )
+            ),
+        ),
+    )
+
+    context.add_executor(
+        for_event=private_key_use_case.PrivateKeyCreatedEvent,
+        executor=ContextExecutor(
+            private_key_use_case.PrivateKeyCreatedEvent,
+            lambda e: create_refresh_token.execute(
+                token_use_case.CreateRefreshTokenEvent(
+                    pkey=e.pkey,
+                    user_id=e.user_id,
+                )
+            ),
+        ),
+    )
+
+    context.add_executor(
+        for_event=private_key_use_case.PrivateKeyCreatedEvent,
+        executor=ContextExecutor(
+            private_key_use_case.PrivateKeyCreatedEvent,
+            lambda e: create_access_token.execute(
+                token_use_case.CreateAccessTokenEvent(
+                    pkey=e.pkey,
+                    user_id=e.user_id,
+                )
+            ),
+        ),
+    )
+
+    return context
+
+
+class LoginRequestBody(BaseModel):
+    email: str
+    password: str
+
+
+@api.post(path=f"{route}login")
+async def login(
+    body: LoginRequestBody,
+    context: Annotated[ContextBus, Depends(_login_request__context_bus)],
+):
+    await context.publish(
+        user_use_cases.ValidateUserPasswordEvent(
+            email=body.email, password=body.password
+        )
+    )
+
+    try:
+        result = await context.gather()
+    except user_use_cases.InvalidEmailError as e:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=e.args)
+    except user_use_cases.InvalidPasswordHashError as e:
+        raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail=e.args)
+    except Exception as e:
+        raise e
+
+    cmp = Composable(dict[str, Any]())
+    cmp.reducer(
+        token_use_case.CreateAccessTokenResult,
+        lambda resp, access_token: set_key(resp, "access_token", access_token),
+    )
+    cmp.reducer(
+        token_use_case.CreateRefreshTokenResult,
+        lambda resp, refresh_token: set_key(resp, "refresh_token", refresh_token),
+    )
+
+    resp = cmp.reduce(result.flatten())
+    return resp
+
+
 class RegisterRequestBody(BaseModel):
     first_name: str
     last_name: str
@@ -30,41 +128,13 @@ class RegisterRequestBody(BaseModel):
     email: str
 
 
-@api.get(path=f"{route}")
-async def login():
-    return "hello world"
-
-
-def _register_request__create_user(
-    request: Request,
-    context: ContextBus = Depends(dependencies.request_context_bus),
-    tx: AsyncSession = Depends(dependencies.request_transaction),
-    queries: QueryProcessor = Depends(dependencies.request_query_processor),
-) -> user_use_cases.CreateUser:
-    return dependencies.cache_request_attr(
-        request, user_use_cases.CreateUser(context, tx, queries)
-    )
-
-
-def _register_request__create_private_key(
-    request: Request,
-    context: ContextBus = Depends(dependencies.request_context_bus),
-    tx: AsyncSession = Depends(dependencies.request_transaction),
-    queries: QueryProcessor = Depends(dependencies.request_query_processor),
-) -> private_key_use_case.CreatePrivateKey:
-    return dependencies.cache_request_attr(
-        request,
-        private_key_use_case.CreatePrivateKey(context, tx, queries),
-    )
-
-
 def _register_request__context_bus(
+    tx: AsyncSession = Depends(dependencies.request_transaction),
+    queries: QueryProcessor = Depends(dependencies.request_query_processor),
     context: ContextBus = Depends(dependencies.request_context_bus),
-    create_user: user_use_cases.CreateUser = Depends(_register_request__create_user),
-    create_private_key: private_key_use_case.CreatePrivateKey = Depends(
-        _register_request__create_private_key
-    ),
 ):
+    create_user = user_use_cases.CreateUser(context, tx, queries)
+    create_private_key = private_key_use_case.CreatePrivateKey(context, tx, queries)
     create_access_token = token_use_case.CreateAccessToken()
     create_refresh_token = token_use_case.CreateRefreshToken()
 

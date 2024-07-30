@@ -10,6 +10,60 @@ from .store.user_model import User
 
 
 @dataclass
+@impl_event(ContextEventProtocol)
+class UserValidPasswordEvent:
+    is_valid: bool
+    user: User
+
+    @property
+    def payload(self) -> Self:
+        return self
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
+class ValidateUserPasswordEvent:
+    email: str
+    password: str
+
+    @property
+    def payload(self) -> Self:
+        return self
+
+
+class InvalidEmailError(Exception): ...
+
+
+class InvalidPasswordHashError(Exception): ...
+
+
+class ValidateUserPassword:
+    def __init__(
+        self, context: ContextBus, session: AsyncSession, queries: QueryProcessor
+    ) -> None:
+        self.__context = context
+        self.__session = session
+        self.__queries = queries
+
+    async def execute(self, params: ValidateUserPasswordEvent):
+        operation = CrudOperation(
+            User, lambda q: q.get_one_by_field("email", params.email)
+        )
+        user = await self.__queries.process(self.__session, operation)
+
+        if not user:
+            raise InvalidEmailError("Not found user email")
+
+        valid = user.validate_hash(params.password)
+        if not valid:
+            raise InvalidPasswordHashError("invalid user password")
+
+        await self.__context.publish(UserValidPasswordEvent(valid, user))
+
+        return valid
+
+
+@dataclass
 @impl_event(ContextEventProtocol[User])
 class UserCreatedEvent:
     _payload: User
