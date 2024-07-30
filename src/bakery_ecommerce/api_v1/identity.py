@@ -32,30 +32,21 @@ def _login_request__context_bus(
     create_private_key = private_key_use_case.CreatePrivateKey(context, tx, queries)
     create_access_token = token_use_case.CreateAccessToken()
     create_refresh_token = token_use_case.CreateRefreshToken()
-
-    context.add_executor(
-        for_event=user_use_cases.ValidateUserPasswordEvent,
-        executor=ContextExecutor(
+    return (
+        context
+        | ContextExecutor(
             user_use_cases.ValidateUserPasswordEvent,
             lambda e: validate_user_password.execute(e),
-        ),
-    )
-
-    context.add_executor(
-        for_event=user_use_cases.UserValidPasswordEvent,
-        executor=ContextExecutor(
+        )
+        | ContextExecutor(
             user_use_cases.UserValidPasswordEvent,
             lambda e: create_private_key.execute(
                 private_key_use_case.CreatePrivateKeyEvent(
                     user_id=e.user.id,
                 )
             ),
-        ),
-    )
-
-    context.add_executor(
-        for_event=private_key_use_case.PrivateKeyCreatedEvent,
-        executor=ContextExecutor(
+        )
+        | ContextExecutor(
             private_key_use_case.PrivateKeyCreatedEvent,
             lambda e: create_refresh_token.execute(
                 token_use_case.CreateRefreshTokenEvent(
@@ -63,12 +54,8 @@ def _login_request__context_bus(
                     user_id=e.user_id,
                 )
             ),
-        ),
-    )
-
-    context.add_executor(
-        for_event=private_key_use_case.PrivateKeyCreatedEvent,
-        executor=ContextExecutor(
+        )
+        | ContextExecutor(
             private_key_use_case.PrivateKeyCreatedEvent,
             lambda e: create_access_token.execute(
                 token_use_case.CreateAccessTokenEvent(
@@ -76,10 +63,8 @@ def _login_request__context_bus(
                     user_id=e.user_id,
                 )
             ),
-        ),
+        )
     )
-
-    return context
 
 
 class LoginRequestBody(BaseModel):
@@ -132,32 +117,24 @@ def _register_request__context_bus(
     tx: AsyncSession = Depends(dependencies.request_transaction),
     queries: QueryProcessor = Depends(dependencies.request_query_processor),
     context: ContextBus = Depends(dependencies.request_context_bus),
-):
+) -> ContextBus:
     create_user = user_use_cases.CreateUser(context, tx, queries)
     create_private_key = private_key_use_case.CreatePrivateKey(context, tx, queries)
     create_access_token = token_use_case.CreateAccessToken()
     create_refresh_token = token_use_case.CreateRefreshToken()
-
-    context.add_executor(
-        for_event=user_use_cases.CreateUserEvent,
-        executor=ContextExecutor(
+    return (
+        context
+        | ContextExecutor(
             user_use_cases.CreateUserEvent,
             lambda e: create_user.execute(e),
-        ),
-    )
-    context.add_executor(
-        for_event=user_use_cases.UserCreatedEvent,
-        executor=ContextExecutor(
+        )
+        | ContextExecutor(
             user_use_cases.UserCreatedEvent,
             lambda e: create_private_key.execute(
                 private_key_use_case.CreatePrivateKeyEvent(user_id=e.id)
             ),
-        ),
-    )
-
-    context.add_executor(
-        for_event=private_key_use_case.PrivateKeyCreatedEvent,
-        executor=ContextExecutor(
+        )
+        | ContextExecutor(
             private_key_use_case.PrivateKeyCreatedEvent,
             lambda e: create_refresh_token.execute(
                 token_use_case.CreateRefreshTokenEvent(
@@ -165,12 +142,8 @@ def _register_request__context_bus(
                     user_id=e.user_id,
                 )
             ),
-        ),
-    )
-
-    context.add_executor(
-        for_event=private_key_use_case.PrivateKeyCreatedEvent,
-        executor=ContextExecutor(
+        )
+        | ContextExecutor(
             private_key_use_case.PrivateKeyCreatedEvent,
             lambda e: create_access_token.execute(
                 token_use_case.CreateAccessTokenEvent(
@@ -178,10 +151,8 @@ def _register_request__context_bus(
                     user_id=e.user_id,
                 )
             ),
-        ),
+        )
     )
-
-    return context
 
 
 @api.post(path=f"{route}")

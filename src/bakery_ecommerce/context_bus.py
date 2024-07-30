@@ -1,5 +1,5 @@
 import inspect
-from typing import Coroutine, Generic, Protocol, Any, TypeVar, Type, Callable
+from typing import Coroutine, Generic, Protocol, Any, Self, TypeVar, Type, Callable
 
 import asyncio
 
@@ -64,8 +64,17 @@ class ContextBus(Generic[_HandlerReturn_T]):
         self.__tasks = asyncio.Queue[tuple[str, list[asyncio.Task[_HandlerReturn_T]]]]()
         self.__lock = asyncio.Lock()
 
+    def __or__(
+        self,
+        value: ContextExecutor[_HandlerReturn_T],
+    ) -> Self:
+        self.add_executor(for_event=value.event_type, executor=value)
+        return self
+
     def add_executor(
-        self, for_event: _HandlerReturn_T, executor: ContextExecutor[_HandlerReturn_T]
+        self,
+        for_event: type[ContextEventProtocol[EventPayload_T]],
+        executor: ContextExecutor[_HandlerReturn_T],
     ):
         event_type_str = str(for_event)
 
