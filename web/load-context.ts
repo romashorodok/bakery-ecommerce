@@ -6,7 +6,7 @@ type Cloudflare = Omit<PlatformProxy<Env>, "dispose">;
 declare module "@remix-run/cloudflare" {
   interface AppLoadContext {
     cloudflare: Cloudflare,
-    extra: string,
+    IDENTITY_SERVER_LOGIN_ROUTE: string,
   }
 }
 
@@ -19,7 +19,7 @@ export const getLoadContext: GetLoadContext = ({
   context,
 }) => {
   return {
+    IDENTITY_SERVER_LOGIN_ROUTE: "http://localhost:9000/api/identity/login",
     ...context,
-    extra: "extra stuff",
   };
 };

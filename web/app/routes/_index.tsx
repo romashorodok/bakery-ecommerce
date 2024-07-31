@@ -1,4 +1,6 @@
 import { json, LoaderFunctionArgs, type MetaFunction } from "@remix-run/cloudflare";
+import { useLoaderData } from "@remix-run/react";
+import { useEffect } from "react";
 
 export const meta: MetaFunction = () => {
   return [
@@ -16,8 +18,14 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 }
 
 export default function Index() {
+  const loaderData = useLoaderData<typeof loader>()
+
+  useEffect(() => {
+    console.log(loaderData)
+  }, [loaderData])
+
   return (
-    <div className="font-sans p-4">
+    <div>
       <h1 className="text-3xl">Welcome to Remix on Cloudflare Workers</h1>
       <ul className="list-disc mt-4 pl-6 space-y-2">
         <li>

@@ -267,5 +267,4 @@ async def token_info(token: Token = Depends(verify_token)):
 
 def register_handler(router: APIRouter):
     router.include_router(api_unsafe, prefix="/identity")
-
     router.include_router(api_safe, prefix="/identity")
