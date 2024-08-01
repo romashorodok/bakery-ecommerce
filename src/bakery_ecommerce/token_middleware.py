@@ -3,8 +3,6 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from nats.aio.client import Client as NATS
-
 from bakery_ecommerce import dependencies
 
 from bakery_ecommerce.internal.identity import (
@@ -20,7 +18,6 @@ def verify_token_factory(
 ):
     async def verify_token(
         authorization: Annotated[str, Header()],
-        nc: Annotated[NATS, Depends(dependencies.request_nats_session)],
         tx: AsyncSession = Depends(dependencies.request_transaction),
         queries: QueryProcessor = Depends(dependencies.request_query_processor),
     ) -> Token:
@@ -46,7 +43,7 @@ def verify_token_factory(
         if not kid:
             raise HTTPException(status_code=401, detail="Missing kid header")
 
-        get_private_key = private_key_use_case.GetPrivateKeySession(nc, tx, queries)
+        get_private_key = private_key_use_case.GetPrivateKeySession(tx, queries)
 
         private_key = await get_private_key.execute(
             private_key_use_case.GetPrivateKeySessionEvent(
