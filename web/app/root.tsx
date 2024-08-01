@@ -26,7 +26,7 @@ export const AccessTokenContext = createContext<{
   setAccessToken: () => null,
 })
 
-function AccessTokenProvider({ children }: PropsWithChildren) {
+export function AccessTokenProvider({ children }: PropsWithChildren) {
   const { accessToken: _accessToken } = useLoaderData<typeof loader>()
   const [accessToken, setAccessToken] = useState<string | undefined>(_accessToken)
 
@@ -55,6 +55,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+const navItems = [
+  { label: "Home", to: "/" },
+  { label: "Admin", to: "/admin" },
+];
+
 export type AppContext = {
   accessToken: string | undefined,
   setAccessToken: Dispatch<SetStateAction<string | undefined>>
@@ -75,9 +80,14 @@ export default function App() {
   return <main>
     <nav>
       <ul className={"flex gap-4"}>
-        <li>
-          <Link to={"/"}>Home</Link>
-        </li>
+        {navItems.map(({ label, to }) => {
+          return (
+            <Link to={to} key={to}>
+              <h1>{label}</h1>
+            </Link>
+          );
+        })}
+
         {accessToken &&
           <li>
             <button type="button" onClick={() => logout()}>Log Out</button>

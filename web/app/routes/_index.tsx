@@ -1,6 +1,6 @@
 import { json, LoaderFunctionArgs, type MetaFunction } from "@remix-run/cloudflare";
-import { useLoaderData, useOutletContext } from "@remix-run/react";
-import { useCallback, useEffect } from "react";
+import { useOutletContext } from "@remix-run/react";
+import { useCallback } from "react";
 import { useAuthFetch } from "~/hooks/useAuthFetch";
 import { AppContext } from "~/root";
 
@@ -15,12 +15,10 @@ export const meta: MetaFunction = () => {
 };
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
-  console.log(context)
   return json({ test: "test" })
 }
 
 export default function Index() {
-  const loaderData = useLoaderData<typeof loader>()
   const { fetch } = useAuthFetch()
   const { accessToken } = useOutletContext<AppContext>()
 
