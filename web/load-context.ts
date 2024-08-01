@@ -7,6 +7,8 @@ declare module "@remix-run/cloudflare" {
   interface AppLoadContext {
     cloudflare: Cloudflare,
     IDENTITY_SERVER_LOGIN_ROUTE: string,
+    IDENTITY_SERVER_REFRESH_TOKEN_ROUTE: string,
+    IDENTITY_SERVER_LOGOUT_ROUTE: string,
   }
 }
 
@@ -20,6 +22,8 @@ export const getLoadContext: GetLoadContext = ({
 }) => {
   return {
     IDENTITY_SERVER_LOGIN_ROUTE: "http://localhost:9000/api/identity/login",
+    IDENTITY_SERVER_REFRESH_TOKEN_ROUTE: "http://localhost:9000/api/identity/refresh-access-token",
+    IDENTITY_SERVER_LOGOUT_ROUTE: "http://localhost:9000/api/identity",
     ...context,
   };
 };

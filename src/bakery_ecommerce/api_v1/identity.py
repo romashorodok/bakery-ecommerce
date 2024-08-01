@@ -19,12 +19,11 @@ from bakery_ecommerce.internal.identity import (
     user_use_cases,
 )
 from bakery_ecommerce.internal.identity.store.user_model import User
-from bakery_ecommerce.internal.identity.token import Token, TokenClaim
+from bakery_ecommerce.internal.identity.token import Token, TokenClaim, TokenUse
 from bakery_ecommerce.internal.store.query import QueryProcessor
 
 
-api_unsafe = APIRouter()
-api_safe = APIRouter()
+api = APIRouter()
 
 route = "/"
 
@@ -78,7 +77,7 @@ class LoginRequestBody(BaseModel):
     password: str
 
 
-@api_unsafe.post(path=f"{route}login")
+@api.post(path=f"{route}login")
 async def login(
     body: LoginRequestBody,
     context: Annotated[ContextBus, Depends(_login_request__context_bus)],
@@ -161,7 +160,7 @@ def _register_request__context_bus(
     )
 
 
-@api_unsafe.post(path=f"{route}")
+@api.post(path=f"{route}")
 async def register(
     body: RegisterRequestBody,
     context: Annotated[ContextBus, Depends(_register_request__context_bus)],
@@ -238,6 +237,9 @@ async def verify_token(
     if not user_id:
         raise HTTPException(status_code=401, detail="Missing user_id claim")
 
+    if payload.get(TokenClaim.TOKEN_USE) != TokenUse.ACCESS_TOKEN:
+        raise HTTPException(status_code=401, detail="Provide access token")
+
     headers = signature.headers()
     kid = headers.get("kid")
     if not kid:
@@ -257,14 +259,181 @@ async def verify_token(
         token.validate()
         return token
     except Exception as e:
-        raise HTTPException(status_code=401, detail=f"{e}")
+        raise HTTPException(status_code=403, detail=f"{e}")
 
 
-@api_safe.post(path=f"{route}token-info", dependencies=[Depends(verify_token)])
+@api.post(path=f"{route}token-info", dependencies=[Depends(verify_token)])
 async def token_info(token: Token = Depends(verify_token)):
     return {"token": token.info()}
 
 
+async def verify_refresh_token(
+    authorization: Annotated[str, Header()],
+    nc: Annotated[NATS, Depends(dependencies.request_nats_session)],
+    tx: AsyncSession = Depends(dependencies.request_transaction),
+    queries: QueryProcessor = Depends(dependencies.request_query_processor),
+):
+    token = authorization.split("Bearer ")[1]
+    signature = Token.extract_signature_jws_from_text(token)
+    payload = loads(signature.payload)
+    if not isinstance(payload, dict) or len(payload) == 0:
+        # 403 must be me returned when token expired
+        # On 401 token must be removed
+        raise HTTPException(status_code=401, detail="Missing token payload")
+
+    user_id = payload.get(TokenClaim.USER_ID)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Missing user_id claim")
+
+    if payload.get(TokenClaim.TOKEN_USE) != TokenUse.REFRESH_TOKEN:
+        raise HTTPException(status_code=401, detail="Provide refresh token")
+
+    headers = signature.headers()
+    kid = headers.get("kid")
+    if not kid:
+        raise HTTPException(status_code=401, detail="Missing kid header")
+
+    get_private_key = private_key_use_case.GetPrivateKeySession(nc, tx, queries)
+
+    private_key = await get_private_key.execute(
+        private_key_use_case.GetPrivateKeySessionEvent(
+            kid=kid,
+            user_id=user_id,
+        )
+    )
+
+    try:
+        token = Token.verify_jws_from_text(token, private_key)
+
+        return token
+    except Exception as e:
+        raise HTTPException(status_code=403, detail=f"{e}")
+
+
+def _refresh_access_token_request__context_bus(
+    context: ContextBus = Depends(dependencies.request_context_bus),
+) -> ContextBus:
+    create_access_token = token_use_case.CreateAccessToken()
+    create_refresh_token = token_use_case.CreateRefreshToken()
+    return (
+        context
+        | ContextExecutor(
+            token_use_case.CreateRefreshTokenEvent,
+            lambda e: create_refresh_token.execute(
+                token_use_case.CreateRefreshTokenEvent(
+                    pkey=e.pkey,
+                    user_id=e.user_id,
+                )
+            ),
+        )
+        | ContextExecutor(
+            token_use_case.CreateAccessTokenEvent,
+            lambda e: create_access_token.execute(
+                token_use_case.CreateAccessTokenEvent(
+                    pkey=e.pkey,
+                    user_id=e.user_id,
+                )
+            ),
+        )
+    )
+
+
+@api.post(
+    path=f"{route}refresh-access-token", dependencies=[Depends(verify_refresh_token)]
+)
+async def refresh_access_token(
+    token: Annotated[Token, Depends(verify_refresh_token)],
+    context: Annotated[ContextBus, Depends(_refresh_access_token_request__context_bus)],
+):
+    private_key = token.private_key()
+    if not private_key:
+        raise HTTPException(
+            status_code=401, detail="Missing private key after refresh token validate"
+        )
+
+    try:
+        user_id = token.user_id()
+        if not user_id:
+            raise ValueError()
+    except Exception:
+        raise HTTPException(
+            status_code=401, detail="Invalid user id after refresh token validate"
+        )
+
+    await context.publish(
+        token_use_case.CreateRefreshTokenEvent(
+            pkey=private_key,
+            user_id=user_id,
+        )
+    )
+
+    await context.publish(
+        token_use_case.CreateAccessTokenEvent(
+            pkey=private_key,
+            user_id=user_id,
+        )
+    )
+
+    result = await context.gather()
+
+    cmp = Composable(dict[str, Any]())
+    cmp.reducer(
+        token_use_case.CreateAccessTokenResult,
+        lambda resp, access_token: set_key(resp, "access_token", access_token),
+    )
+    cmp.reducer(
+        token_use_case.CreateRefreshTokenResult,
+        lambda resp, refresh_token: set_key(resp, "refresh_token", refresh_token),
+    )
+    resp = cmp.reduce(result.flatten())
+    return resp
+
+
+async def verify_any_token(
+    authorization: Annotated[str, Header()],
+    nc: Annotated[NATS, Depends(dependencies.request_nats_session)],
+    tx: AsyncSession = Depends(dependencies.request_transaction),
+    queries: QueryProcessor = Depends(dependencies.request_query_processor),
+):
+    token = authorization.split("Bearer ")[1]
+    signature = Token.extract_signature_jws_from_text(token)
+    payload = loads(signature.payload)
+    if not isinstance(payload, dict) or len(payload) == 0:
+        # 403 must be me returned when token expired
+        # On 401 token must be removed
+        raise HTTPException(status_code=401, detail="Missing token payload")
+
+    user_id = payload.get(TokenClaim.USER_ID)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Missing user_id claim")
+
+    headers = signature.headers()
+    kid = headers.get("kid")
+    if not kid:
+        raise HTTPException(status_code=401, detail="Missing kid header")
+
+    get_private_key = private_key_use_case.GetPrivateKeySession(nc, tx, queries)
+
+    private_key = await get_private_key.execute(
+        private_key_use_case.GetPrivateKeySessionEvent(
+            kid=kid,
+            user_id=user_id,
+        )
+    )
+
+    try:
+        token = Token.verify_jws_from_text(token, private_key)
+
+        return token
+    except Exception as e:
+        raise HTTPException(status_code=403, detail=f"{e}")
+
+
+@api.delete(path=f"{route}", dependencies=[Depends(verify_any_token)])
+def blacklist_token():
+    print("TODO: backlist token on logout")
+    return {"resutl": "TODO"}
+
+
 def register_handler(router: APIRouter):
-    router.include_router(api_unsafe, prefix="/identity")
-    router.include_router(api_safe, prefix="/identity")
+    router.include_router(api, prefix="/identity")

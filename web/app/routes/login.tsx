@@ -1,7 +1,7 @@
-import { useFetcher, useLoaderData, json, useActionData, useNavigate, Form, useOutletContext } from "@remix-run/react"
+import { useFetcher, useLoaderData, json, useOutletContext } from "@remix-run/react"
 import { ActionFunctionArgs, LoaderFunctionArgs, redirect } from "@remix-run/server-runtime"
-import { Dispatch, SetStateAction, useContext, useEffect } from "react"
-import { AccessTokenContext } from "~/root"
+import { useEffect } from "react"
+import { AppContext } from "~/root"
 import { commitSession, getSession } from "~/session.server"
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -11,7 +11,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     return redirect("/")
   }
 
-  const result: { errors?: any, login: string } = { login: "test" }
+  const result: { errors?: any } = {}
 
   const errorDetail = session.get("error")
 
@@ -70,12 +70,11 @@ export default function Login() {
   const fetcher = useFetcher<typeof action>()
   const { errors } = useLoaderData<typeof loader>()
 
-  const { setAccessToken } = useOutletContext<{ setAccessToken: Dispatch<SetStateAction<string | undefined>> }>()
+  const { setAccessToken } = useOutletContext<AppContext>()
 
   useEffect(() => {
     if (fetcher.data?.access_token) {
       const accessToken = fetcher.data.access_token
-      console.log("result", accessToken)
       setAccessToken(accessToken)
     }
   }, [setAccessToken, fetcher.data])

@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Protocol, Self
+from uuid import UUID
 
 from joserfc import jwk, jws, jwt
 
@@ -22,6 +23,7 @@ class TokenClaim(StrEnum):
     AUDIENCE = "aud"
     SUBJECT = "sub"
 
+    TOKEN_USE = "token:use"
     USER_ID = "user:id"
 
 
@@ -35,6 +37,7 @@ class Token:
     def __init__(self) -> None:
         self.__claims = dict[str, Any]()
         self.__headers = dict[str, Any]()
+        self.__private_key: PrivateKeyProtocol | None = None
 
     def validate(self):
         claims_registry = jwt.JWTClaimsRegistry(
@@ -64,6 +67,7 @@ class Token:
         token = cls()
         token.__headers = jws_signature.header
         token.__claims = jws_signature.claims
+        token.__private_key = public_key
         return token
 
     def sign_token_as_jws(self, private_key: PrivateKeyProtocol):
@@ -95,8 +99,17 @@ class Token:
     def info(self) -> dict:
         return {"claims": self.__claims, "headers": self.__headers}
 
+    def private_key(self) -> PrivateKeyProtocol | None:
+        return self.__private_key
+
+    def user_id(self) -> UUID | None:
+        user_id = self.__claims.get(TokenClaim.USER_ID)
+        if not user_id:
+            return None
+        return UUID(user_id)
+
     def add_token_use(self, token_use: TokenUse):
-        self.__claims["token_use"] = str(token_use)
+        self.__claims[TokenClaim.TOKEN_USE] = str(token_use)
 
     def add_claim(self, claim: TokenClaim, value: Any):
         self.__claims[claim] = value

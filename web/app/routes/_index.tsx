@@ -1,6 +1,8 @@
 import { json, LoaderFunctionArgs, type MetaFunction } from "@remix-run/cloudflare";
-import { useLoaderData } from "@remix-run/react";
-import { useEffect } from "react";
+import { useLoaderData, useOutletContext } from "@remix-run/react";
+import { useCallback, useEffect } from "react";
+import { useAuthFetch } from "~/hooks/useAuthFetch";
+import { AppContext } from "~/root";
 
 export const meta: MetaFunction = () => {
   return [
@@ -19,13 +21,21 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 
 export default function Index() {
   const loaderData = useLoaderData<typeof loader>()
+  const { fetch } = useAuthFetch()
+  const { accessToken } = useOutletContext<AppContext>()
 
-  useEffect(() => {
-    console.log(loaderData)
-  }, [loaderData])
+  const tokenInfo = useCallback(async () => {
+    const result = await fetch(`http://localhost:9000/api/identity/token-info`, {
+      method: "POST",
+    })
+    if (!result) return
+    console.log(await result.json())
+  }, [accessToken])
 
   return (
     <div>
+      <button onClick={() => tokenInfo()}>Verify</button>
+
       <h1 className="text-3xl">Welcome to Remix on Cloudflare Workers</h1>
       <ul className="list-disc mt-4 pl-6 space-y-2">
         <li>
