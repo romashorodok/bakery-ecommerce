@@ -1,81 +1,58 @@
-import { LoaderFunctionArgs, redirect, json } from "@remix-run/cloudflare";
-import { isRouteErrorResponse, Outlet, useRouteError } from "@remix-run/react";
+import { LoaderFunctionArgs } from "@remix-run/cloudflare";
+import { isRouteErrorResponse, Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as React from "react";
-import { destroySession, getSession, commitSession } from "~/session.server";
+import { sessionProtectedLoader } from "~/session.server";
 
-export const loader = async ({ request, context }: LoaderFunctionArgs) => {
-  const session = await getSession(request.headers.get("Cookie"))
-  const refreshToken = session.get("refreshToken")
+export const loader = async (loader: LoaderFunctionArgs) => sessionProtectedLoader(loader)
 
-  console.log("Admin layout trigger")
 
-  if (!refreshToken) {
-    return redirect("/", {
-      headers: {
-        "Set-Cookie": await destroySession(session),
-      }
-    })
-  }
+const navItems = [
+  { label: "Main", to: "/admin" },
+  { label: "Products", to: "/admin/products" },
+];
 
-  try {
-    const response = await fetch(context.IDENTITY_SERVER_REFRESH_TOKEN_ROUTE, {
-      headers: {
-        "authorization": `Bearer ${refreshToken}`
-      },
-      method: "POST"
-    })
-
-    const result = await response.json<{ refresh_token: { value: string, expires_at: number }, access_token: { value: string, expires_at: number } }>()
-
-    session.set('refreshToken', result.refresh_token.value)
-    session.set('accessToken', result.access_token.value)
-
-    session.set('refreshToken', result.refresh_token.value)
-    session.set('accessToken', result.access_token.value)
-
-    return json({ accessToken: result.access_token.value }, {
-      headers: {
-        "Set-Cookie": await commitSession(session),
-      }
-    })
-  } catch (e) {
-    console.log("admin._index.tsx. Error:", e)
-    return redirect("/", {
-      headers: {
-        "Set-Cookie": await destroySession(session),
-      }
-    })
-  }
-};
 
 function Layout({
   children,
 }: React.PropsWithChildren<{}>) {
   return (
-    <div>
-      <header>
-        <nav>
-        </nav>
-      </header>
-
-      <main className="dashboard-layout__main">
-        <section>{children}</section>
-      </main>
-
-      <footer className="dashboard-layout__footer">
-        <div className="dashboard-layout__copyright">
-          &copy; 2024 Remix Software
-        </div>
-      </footer>
+    <div className="flex h-full">
+      <nav>
+        {navItems.map(({ label, to }) => {
+          return (
+            <Link to={to} key={to}>
+              <h1>{label}</h1>
+            </Link>
+          );
+        })}
+      </nav>
+      <section className="w-full overflow-scroll">
+        <main className="">
+          <section>{children}</section>
+        </main>
+      </section>
     </div>
   );
 }
 
+export type AdminContext = { accessToken: string | null, setAccessToken: React.Dispatch<React.SetStateAction<string | null>> }
+
 export default function AdminLayout() {
+  const [queryClient,] = React.useState(() => new QueryClient())
+  const loaderData = useLoaderData<typeof loader>()
+  const [accessToken, setAccessToken] = React.useState<string | null>(loaderData?.accessToken || null)
+
+  React.useEffect(() => {
+    console.log("Admin context", accessToken)
+  }, [accessToken])
+
   return (
-    <Layout>
-      <Outlet />
-    </Layout>
+    <QueryClientProvider client={queryClient}>
+      <Layout>
+        <Outlet context={{ accessToken, setAccessToken }} />
+      </Layout>
+    </QueryClientProvider>
   );
 }
 

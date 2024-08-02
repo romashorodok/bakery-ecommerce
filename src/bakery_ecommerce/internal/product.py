@@ -1,10 +1,8 @@
-import asyncio
 from dataclasses import dataclass
 from typing import Any, Self, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bakery_ecommerce.composable import Composable
 from bakery_ecommerce.context_bus import (
     ContextBus,
     ContextEventProtocol,
@@ -16,14 +14,23 @@ from .store import persistence
 
 from .store.crud_queries import CrudOperation
 from .store.persistence.product import Product
-from .store.persistence.inventory_product import InventoryProduct
 from .store.query import QueryProcessor
 
 
 @dataclass
-class GetProductListParams:
+@impl_event(ContextEventProtocol)
+class GetProductListEvent:
     page: int
     page_size: int
+
+    @property
+    def payload(self) -> Self:
+        return self
+
+
+@dataclass
+class GetProductListResult:
+    products: Sequence[Product]
 
 
 class GetProductList:
@@ -33,7 +40,7 @@ class GetProductList:
         self.__queries = queries
         self.__session = session
 
-    async def execute(self, params: GetProductListParams):
+    async def execute(self, params: GetProductListEvent) -> GetProductListResult:
         product = persistence.product.Product
 
         async def get_product_by_cursor(
@@ -44,29 +51,41 @@ class GetProductList:
             return row.scalars().all()
 
         operation = store.crud_queries.CustomBuilder(get_product_by_cursor)
-        return await self.__queries.process(self.__session, operation)
+        products = await self.__queries.process(self.__session, operation)
+        return GetProductListResult(products)
 
 
 @dataclass
-class GetProductByNameParams:
-    name: str
+@impl_event(ContextEventProtocol)
+class GetProductByIdEvent:
+    product_id: str
+
+    @property
+    def payload(self) -> Self:
+        return self
 
 
-class GetProductByName:
+@dataclass
+class GetProductByIdResult:
+    product: Product | None
+
+
+class GetProductById:
     def __init__(
         self, session: AsyncSession, queries: store.query.QueryProcessor
     ) -> None:
         self.__queries = queries
         self.__session = session
 
-    async def execute(
-        self, params: GetProductByNameParams
-    ) -> persistence.product.Product | None:
-        op = store.crud_queries.CrudOperation(
-            persistence.product.Product,
-            lambda q: q.get_one_by_field("name", params.name),
+    async def execute(self, params: GetProductByIdEvent) -> GetProductByIdResult:
+        result = await self.__queries.process(
+            self.__session,
+            store.crud_queries.CrudOperation(
+                persistence.product.Product,
+                lambda q: q.get_one_by_field("id", params.product_id),
+            ),
         )
-        return await self.__queries.process(self.__session, op)
+        return GetProductByIdResult(result)
 
 
 @dataclass
@@ -112,3 +131,32 @@ class CreateProduct:
         product = persistence.product.Product(name=name)
         operation = CrudOperation(Product, lambda q: q.create_one(product))
         return await self.__queries.process(self.__session, operation)
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
+class UpdateProductEvent:
+    product_id: str
+    fields: dict[str, Any]
+
+    @property
+    def payload(self) -> Self:
+        return self
+
+
+@dataclass
+class UpdateProductResult:
+    product: Product | None
+
+
+class UpdateProduct:
+    def __init__(self, session: AsyncSession, queries: QueryProcessor) -> None:
+        self.__session = session
+        self.__queries = queries
+
+    async def execute(self, params: UpdateProductEvent) -> UpdateProductResult:
+        operation = CrudOperation(
+            Product, lambda q: q.update_partial("id", params.product_id, params.fields)
+        )
+        result = await self.__queries.process(self.__session, operation)
+        return UpdateProductResult(result)

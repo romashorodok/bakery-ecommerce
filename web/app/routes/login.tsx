@@ -26,13 +26,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   })
 }
 
-export const action = async ({ context, request }: ActionFunctionArgs) => {
+export const action = async ({ context: { cloudflare }, request }: ActionFunctionArgs) => {
   const session = await getSession(request.headers.get("Cookie"))
   const form = await request.formData()
   const email = form.get("email")
   const password = form.get("password")
 
-  const response = await fetch(`${context.IDENTITY_SERVER_LOGIN_ROUTE}`, {
+  const response = await fetch(`${cloudflare.env.IDENTITY_SERVER_LOGIN_ROUTE}`, {
     headers: {
       "content-type": "application/json",
     },

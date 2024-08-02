@@ -55,7 +55,7 @@ export function useAuthFetch() {
     init.headers['authorization'] = `Bearer ${accessToken}`
 
     if (useAuthFetchRequestMutex.isLocked()) {
-      console.warn(`Trying send authorized by unauthorized identity request url: ${url} , init: ${init}`)
+      console.warn(`Trying send authorized by unauthorized identity request url: ${url} , init: ${JSON.stringify(init)}`)
       return
     }
 
@@ -68,25 +68,39 @@ export function useAuthFetch() {
         case 401:
           setAccessToken(undefined)
         case 403:
-          await fetch("/session_refresh_access_token", {
+          const response = await fetch("/session_refresh_access_token", {
             method: "POST"
-          })
-            .then(r => r.json<{ access_token: string }>())
-            .then(r => setAccessToken(r.access_token))
-            .catch(() => {
-              setAccessToken(undefined)
-              fetch("/session_delete", {
-                method: "DELETE"
-              })
+          }).catch()
+
+          if (response.status !== 200 && response.status !== 201) {
+            console.log("Unable refresh access token")
+            await fetch("/session_delete", {
+              method: "DELETE"
             })
+            setAccessToken(undefined)
+            return resp
+          }
+
+          const data = await response.json<{ access_token: string }>()
+          if (!data.access_token) {
+            console.log("Not found access token after refresh")
+            setAccessToken(undefined)
+            return resp
+          }
+
+
+          // @ts-ignore
+          init.headers['authorization'] = `Bearer ${data.access_token}`
+          const newResp = await fetch(url, init).catch()
+          setAccessToken(data.access_token)
+          return newResp
       }
 
       return resp
     } finally {
       unlock()
     }
-
   }, [accessToken])
 
-  return { fetch: __fetch }
+  return { fetch: __fetch, accessToken }
 }

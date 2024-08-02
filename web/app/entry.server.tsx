@@ -10,7 +10,7 @@ import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 import { commitSession, getSession } from "./session.server";
 
-async function handleProtectedRequest(request: Request, context: AppLoadContext) {
+async function handleProtectedRequest(request: Request, { cloudflare }: AppLoadContext) {
   const session = await getSession(request.headers.get("Cookie"))
 
   const refreshToken = session.get('refreshToken')
@@ -18,7 +18,7 @@ async function handleProtectedRequest(request: Request, context: AppLoadContext)
     throw Error("Unauthorized user access protected route")
   }
 
-  const response = await fetch(context.IDENTITY_SERVER_REFRESH_TOKEN_ROUTE, {
+  const response = await fetch(cloudflare.env.IDENTITY_SERVER_REFRESH_TOKEN_ROUTE, {
     headers: {
       "authorization": `Bearer ${refreshToken}`
     },
@@ -57,8 +57,8 @@ export default async function handleRequest(
 
   const isProtectedRoute = protectedRoutes.some(protectedRoute => routes.includes(protectedRoute, 0));
   try {
-    console.log("protected route")
     if (isProtectedRoute) {
+      console.log("protected route")
       session = await handleProtectedRequest(request, loadContext)
     }
   } catch (e) {

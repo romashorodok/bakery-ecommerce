@@ -11,11 +11,12 @@ import {
 import "./tailwind.css";
 import { LoaderFunctionArgs } from "@remix-run/server-runtime";
 import { getSession } from "./session.server";
-import { createContext, Dispatch, PropsWithChildren, SetStateAction, useContext, useState } from "react";
+import { createContext, Dispatch, PropsWithChildren, SetStateAction, useContext, useEffect, useState } from "react";
+import { ChakraProvider } from '@chakra-ui/react'
+
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const session = await getSession(request.headers.get("Cookie"))
-
   return { accessToken: session.get("accessToken") }
 }
 
@@ -23,12 +24,17 @@ export const AccessTokenContext = createContext<{
   accessToken?: string,
   setAccessToken: Dispatch<SetStateAction<string | undefined>>
 }>({
+  accessToken: undefined,
   setAccessToken: () => null,
 })
 
 export function AccessTokenProvider({ children }: PropsWithChildren) {
-  const { accessToken: _accessToken } = useLoaderData<typeof loader>()
-  const [accessToken, setAccessToken] = useState<string | undefined>(_accessToken)
+  const loaderData = useLoaderData<typeof loader>()
+  const [accessToken, setAccessToken] = useState<string | undefined>(loaderData?.accessToken || undefined)
+
+  useEffect(() => {
+    console.log("context provider loader", loaderData)
+  }, [loaderData])
 
   return <AccessTokenContext.Provider value={{ accessToken, setAccessToken }}>
     {children}
@@ -46,7 +52,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         <AccessTokenProvider>
-          {children}
+          <ChakraProvider>
+            {children}
+          </ChakraProvider>
           <ScrollRestoration />
           <Scripts />
         </AccessTokenProvider >
@@ -77,8 +85,8 @@ export default function App() {
     navigate("/")
   }
 
-  return <main>
-    <nav>
+  return <main className="h-screen flex flex-col">
+    <nav className="">
       <ul className={"flex gap-4"}>
         {navItems.map(({ label, to }) => {
           return (
@@ -96,7 +104,7 @@ export default function App() {
         {!accessToken && <li> <Link to={"/login"}>Log In</Link> </li>}
       </ul>
     </nav>
-    <section className={"font-sans p-4"}>
+    <section className={"font-sans max-h-full overflow-scroll"}>
       <Outlet context={{ setAccessToken, accessToken }} />
     </section>
   </main >

@@ -1,24 +1,13 @@
 import { isRouteErrorResponse, useRouteError } from "@remix-run/react";
-import { LoaderFunctionArgs, redirect } from '@remix-run/cloudflare';
-import * as React from "react";
-import { getSession, destroySession } from "~/session.server";
+import { LoaderFunctionArgs } from '@remix-run/cloudflare';
+import { sessionProtectedLoader } from "~/session.server";
+import { useEffect } from "react";
 
 
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const session = await getSession(request.headers.get("Cookie"))
-  const refreshToken = session.get("refreshToken")
+export const loader = async (loader: LoaderFunctionArgs) => {
+  const resp = await sessionProtectedLoader(loader)
 
-  console.log("Admin index trigger")
-
-  if (!refreshToken) {
-    return redirect("/", {
-      headers: {
-        "Set-Cookie": await destroySession(session),
-      }
-    })
-  }
-
-  return {}
+  return resp
 };
 
 
@@ -66,7 +55,7 @@ export function CatchBoundary() {
 
 
 export function ErrorBoundary({ error }: { error: Error }) {
-  React.useEffect(() => {
+  useEffect(() => {
     console.error(error);
   }, [error]);
 

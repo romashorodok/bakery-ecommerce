@@ -5,6 +5,13 @@ workers_dev = true
 # https://developers.cloudflare.com/workers/platform/compatibility-dates
 compatibility_date = "2023-04-20"
 
+[vars]
+IDENTITY_SERVER_LOGIN_ROUTE = "http://localhost:9000/api/identity/login"
+IDENTITY_SERVER_REFRESH_TOKEN_ROUTE =  "http://localhost:9000/api/identity/refresh-access-token"
+IDENTITY_SERVER_LOGOUT_ROUTE = "http://localhost:9000/api/identity"
+
+PRODUCTS_ROUTE = "http://localhost:9000/api/products"
+
 [site]
 bucket = "./build/client"
 

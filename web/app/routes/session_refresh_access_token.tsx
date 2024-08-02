@@ -1,7 +1,7 @@
 import { ActionFunctionArgs, json } from "@remix-run/server-runtime"
 import { commitSession, destroySession, getSession } from "~/session.server"
 
-export const action = async ({ context, request }: ActionFunctionArgs) => {
+export const action = async ({ context: { cloudflare }, request }: ActionFunctionArgs) => {
   const session = await getSession(request.headers.get("Cookie"))
   const refreshToken = session.get('refreshToken')
 
@@ -16,7 +16,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     })
   }
 
-  const response = await fetch(context.IDENTITY_SERVER_REFRESH_TOKEN_ROUTE, {
+  const response = await fetch(cloudflare.env.IDENTITY_SERVER_REFRESH_TOKEN_ROUTE, {
     headers: {
       "authorization": `Bearer ${refreshToken}`
     },

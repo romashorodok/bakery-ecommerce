@@ -7,7 +7,7 @@ from typing import (
     override,
 )
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,25 +26,25 @@ class NotFoundException(Exception):
     pass
 
 
-CustomBuilder_T = TypeVar("AsyncCrudBuilder_T")
+AsyncCrudBuilder_T = TypeVar("AsyncCrudBuilder_T")
 
 
-class CustomBuilder(query.Query[CustomBuilder_T], Generic[CustomBuilder_T]):
+class CustomBuilder(query.Query[AsyncCrudBuilder_T], Generic[AsyncCrudBuilder_T]):
     def __init__(
-        self, fn: Callable[[AsyncSession], Coroutine[None, None, CustomBuilder_T]]
+        self, fn: Callable[[AsyncSession], Coroutine[None, None, AsyncCrudBuilder_T]]
     ) -> None:
         self.fn = fn
 
 
 class CustomBuilderHandler(
-    query.QueryHandler[CustomBuilder[CustomBuilder_T], CustomBuilder_T]
+    query.QueryHandler[CustomBuilder[AsyncCrudBuilder_T], AsyncCrudBuilder_T]
 ):
     @override
     def __init__(self, executor: AsyncSession) -> None:
         self.__executor = executor
 
     @override
-    async def handle(self, query: CustomBuilder) -> CustomBuilder_T:
+    async def handle(self, query: CustomBuilder) -> AsyncCrudBuilder_T:
         return await query.fn(self.__executor)
 
 
@@ -76,10 +76,24 @@ class AsyncCrud(Generic[AsyncCrud_T]):
             return model
         except IntegrityError:
             raise IntegrityConflictException(
-                f"{model.__tablename__} conflicts with existing data.",
+                f"{model} conflicts with existing data.",
             )
         except Exception as e:
             raise SnippetException(f"Unknown error occurred: {e}") from e
+
+    async def update_partial(
+        self, id_field: str, id_value: Any, fields: dict[str, Any]
+    ) -> AsyncCrud_T | None:
+        if id_field in fields:
+            del fields[id_field]
+        stmt = (
+            update(self.__model)
+            .where(getattr(self.__model, id_field) == id_value)
+            .values(fields)
+            .returning(self.__model)
+        )
+        result = await self.__session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def remote_by_field(self, field: str = "id", value: Any = Any) -> bool: ...
 

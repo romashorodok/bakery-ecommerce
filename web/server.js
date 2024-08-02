@@ -44,6 +44,7 @@ export default {
           env,
         },
       };
+      console.log(loadContext)
       return await handleRemixRequest(request, loadContext);
     } catch (error) {
       console.log(error);
