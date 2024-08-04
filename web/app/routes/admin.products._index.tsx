@@ -30,7 +30,7 @@ function useProductFetcher() {
         return null
       }
 
-      const response = await fetch(loaderData.productsRoute)
+      const response = await fetch(productsRoute)
       if (!response || !response.ok) {
         throw new Error('Something goes wrong...')
       }

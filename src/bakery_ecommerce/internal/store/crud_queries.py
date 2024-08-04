@@ -7,7 +7,7 @@ from typing import (
     override,
 )
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,7 +68,7 @@ class AsyncCrud(Generic[AsyncCrud_T]):
                 f"Column {field} not found on {self.__model}.",
             )
         result = await self.__session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
 
     async def create_one(self, model: AsyncCrud_T) -> AsyncCrud_T:
         try:
@@ -95,7 +95,10 @@ class AsyncCrud(Generic[AsyncCrud_T]):
         result = await self.__session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def remote_by_field(self, field: str = "id", value: Any = Any) -> bool: ...
+    async def remote_by_field(self, field: str = "id", value: Any = Any) -> bool:
+        stmt = delete(self.__model).where(getattr(self.__model, field) == value)
+        result = await self.__session.execute(stmt)
+        return result.rowcount == 1
 
 
 CrudQueryResult_T = TypeVar("CrudQueryResult_T")

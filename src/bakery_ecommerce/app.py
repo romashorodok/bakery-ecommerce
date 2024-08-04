@@ -24,5 +24,7 @@ app.add_middleware(
 __api_v1 = fastapi.APIRouter(prefix="/api")
 api_v1.product.register_handler(__api_v1)
 api_v1.identity.register_handler(__api_v1)
+api_v1.catalog.register_handler(__api_v1)
+api_v1.front_page.register_handler(__api_v1)
 
 app.include_router(__api_v1)

@@ -65,7 +65,7 @@ def upgrade() -> None:
         sa.Column(
             "product_id",
             sa.UUID,
-            nullable=False,
+            nullable=True,
         ),
         sa.ForeignKeyConstraint(["product_id"], ["products.id"]),
         sa.Column(

@@ -34,22 +34,6 @@ from bakery_ecommerce.internal.store.query import QueryProcessor
 from bakery_ecommerce.token_middleware import verify_access_token
 
 
-# async def get_shared_session(
-#     request: fastapi.Request,
-#     session: AsyncSession = fastapi.Depends(dependencies.transaction),
-# ) -> AsyncSession:
-#     if not hasattr(request.state, "db"):
-#         request.state.db = session
-#     return request.state.db
-
-# def get_shared_create_product(
-#     session: AsyncSession = fastapi.Depends(get_shared_session),
-#     queries: QueryProcessor = fastapi.Depends(dependencies.query_processor),
-# ):
-#     print("create product session", session)
-#     yield CreateProduct(session, queries)
-
-
 api = fastapi.APIRouter()
 
 

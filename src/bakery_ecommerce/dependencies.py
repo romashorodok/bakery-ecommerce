@@ -4,9 +4,17 @@ import fastapi
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bakery_ecommerce.context_bus import ContextBus
+from bakery_ecommerce.internal.catalog.store.catalog_queries import (
+    NormalizeCatalogItemsPosition,
+    NormalizeCatalogItemsPositionHandler,
+)
 from bakery_ecommerce.internal.identity.store.private_key_session_queries import (
     GetPrivateKeySignature,
     GetPrivateKeySignatureHandler,
+)
+from bakery_ecommerce.internal.store.join_queries import (
+    JoinOperation,
+    JoinOperationHandler,
 )
 from bakery_ecommerce.internal.store.query import (
     QueryCache,
@@ -81,6 +89,8 @@ query_handlers = QueryProcessorHandlers(
         crud_queries.CustomBuilder: crud_queries.CustomBuilderHandler,
         product_queries.FindProductByName: product_queries.FindProductByNameHandler,
         GetPrivateKeySignature: GetPrivateKeySignatureHandler,
+        JoinOperation: JoinOperationHandler,
+        NormalizeCatalogItemsPosition: NormalizeCatalogItemsPositionHandler,
     }
 )
 

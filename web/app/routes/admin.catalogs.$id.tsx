@@ -1,49 +1,45 @@
+import { json, LoaderFunctionArgs } from "@remix-run/cloudflare"
 import { useLoaderData } from "@remix-run/react"
-import { LoaderFunctionArgs, json } from "@remix-run/cloudflare"
-import { sessionProtectedLoader } from "~/session.server"
+import { FormEvent, useEffect, useState } from "react"
 import { useAuthFetch } from "~/hooks/useAuthFetch"
 import { hasDifferentValue, useModel } from "~/hooks/useModel"
-import { FormEvent, useEffect, useState } from "react"
+import { sessionProtectedLoader } from "~/session.server"
 
 export const loader = async (loader: LoaderFunctionArgs) => {
   await sessionProtectedLoader(loader)
   const { params, context: { cloudflare } } = loader
 
   return json({
-    productId: params.id,
-    productsRoute: cloudflare.env.PRODUCTS_ROUTE,
+    catalogId: params.id,
+    catalogRoute: cloudflare.env.CATALOGS_ROUTE
   })
 }
 
-type Product = { id: string, name: string }
+type Catalog = { headline: string, id: string }
 
-export default function AdminProductsById() {
+export default function AdminCatalogsById() {
   const loaderData = useLoaderData<typeof loader>()
-
-  if (!loaderData.productId) {
-    return (
-      <div>Not found product</div>
-    )
+  if (!loaderData.catalogId || !loaderData.catalogRoute) {
+    return <div>Not found catalog id or route</div>
   }
 
   const { fetch } = useAuthFetch()
-
-  const { model, updater } = useModel<Product>({
-    id: loaderData.productId,
-    key: ["product", { id: loaderData.productId }],
-    route: loaderData.productsRoute,
+  const { model, updater } = useModel<Catalog>({
+    id: loaderData.catalogId,
+    key: ["catalog", { id: loaderData.catalogId }],
+    route: loaderData.catalogRoute,
     fetch,
   })
 
-  const [data, setData] = useState<{ product: Product } | null>(null)
+  const [data, setData] = useState<{ catalog: Catalog } | null>(null)
 
   useEffect(() => {
     if (!model.data) return
 
     (async () => {
-      const result = await model.data.json<{ product: Product }>()
+      const result = await model.data.json<{ catalog: Catalog }>()
 
-      if (data != null && (!hasDifferentValue(data.product, result.product)))
+      if (data != null && (!hasDifferentValue(data.catalog, result.catalog)))
         return
 
       setData(result)
@@ -62,22 +58,22 @@ export default function AdminProductsById() {
     </div>
   }
 
-  if (data && data.product) {
+  if (data && data.catalog) {
 
     function submit(evt: FormEvent<HTMLFormElement>) {
       evt.preventDefault()
 
       // @ts-ignore
-      const nameField = evt.target["name"].value
+      const headline = evt.target["headline"].value
 
-      if (!data?.product) {
+      if (!data?.catalog) {
         throw new Error("Original product newer must be null")
       }
 
       updater.mutate({
-        model: data.product,
+        model: data.catalog,
         mutated: {
-          name: nameField,
+          headline: headline,
         }
       })
 
@@ -87,18 +83,18 @@ export default function AdminProductsById() {
     return (
       <div>
         <form onSubmit={submit} autoComplete="off">
-          <h1>From state: {data.product.name}</h1>
+          <h1>From state: {data.catalog.headline}</h1>
 
-          <h1>Edit product</h1>
+          <h1>Edit catalog</h1>
           {updater.error &&
             <h1 onClick={() => updater.reset()}>
               {updater.error.message}
             </h1>
           }
 
-          <h1>{data.product.id}</h1>
+          <h1>{data.catalog.id}</h1>
 
-          <input defaultValue={data.product.name} name="name" />
+          <input defaultValue={data.catalog.headline} name="headline" />
 
           <button type="submit">Update</button>
           <button type="reset">Reset</button>
@@ -107,3 +103,4 @@ export default function AdminProductsById() {
     )
   }
 }
+

@@ -10,6 +10,8 @@ export const loader = async (loader: LoaderFunctionArgs) => sessionProtectedLoad
 const navItems = [
   { label: "Main", to: "/admin" },
   { label: "Products", to: "/admin/products" },
+  { label: "Frontpage", to: "/admin/frontpage" },
+  { label: "Catalogs", to: "/admin/catalogs" }
 ];
 
 
