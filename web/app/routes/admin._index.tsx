@@ -3,7 +3,6 @@ import { LoaderFunctionArgs } from '@remix-run/cloudflare';
 import { sessionProtectedLoader } from "~/session.server";
 import { useEffect } from "react";
 
-
 export const loader = async (loader: LoaderFunctionArgs) => {
   const resp = await sessionProtectedLoader(loader)
 
@@ -13,17 +12,8 @@ export const loader = async (loader: LoaderFunctionArgs) => {
 
 export default function AdminIndex() {
   return (
-    <>
-      <div>
-        <div>
-          <p>Here's what you missed while you were away.</p>
-        </div>
-      </div>
-      <section>
-        <div>Content</div>
-      </section>
-    </>
-  );
+    <div>Admin index</div>
+  )
 }
 
 
@@ -68,3 +58,4 @@ export function ErrorBoundary({ error }: { error: Error }) {
     </div>
   );
 }
+

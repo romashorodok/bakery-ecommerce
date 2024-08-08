@@ -1,4 +1,3 @@
-import { Button } from "@chakra-ui/react"
 import { json, LoaderFunctionArgs } from "@remix-run/cloudflare"
 import { Link, useLoaderData } from "@remix-run/react"
 import { useQuery } from "@tanstack/react-query"
@@ -6,6 +5,73 @@ import { useEffect } from "react"
 import ProductCard from "~/components/product.card"
 import { useAuthFetch } from "~/hooks/useAuthFetch"
 
+import { AspectRatio } from "~/components/ui/aspect-ratio"
+import {
+  Car,
+  File,
+  Home,
+  LineChart,
+  ListFilter,
+  MoreHorizontal,
+  Package,
+  Package2,
+  PanelLeft,
+  PlusCircle,
+  Search,
+  Settings,
+  ShoppingCart,
+  Users2,
+} from "lucide-react"
+
+import { Badge } from "~/components/ui/badge"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "~/components/ui/breadcrumb"
+import { Button } from "~/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+import { Input } from "~/components/ui/input"
+import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "~/components/ui/tabs"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "~/components/ui/tooltip"
 
 export const loader = async ({ context: { cloudflare } }: LoaderFunctionArgs) => {
   return json({
@@ -45,14 +111,19 @@ function useProductFetcher() {
 }
 
 function Product(product: Product) {
-  return <div key={product.id} className={"relative"}>
-    <ProductCard {...product} />
-    <Link to={`/admin/products/${product.id}`}>
-      <Button variant="ghost" colorScheme="blue" className={`!absolute !bg-white top-[10px] right-[10px]`}>
-        Edit
-      </Button>
-    </Link>
-  </div>
+  return (
+    <div key={product.id}>
+      <div className="flex justify-end py-2">
+        <Link to={`/admin/products/${product.id}`} className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+          <Button size="sm" className="top-[5px] right-[10px] h-7 gap-1">
+            <PlusCircle className="h-3.5 w-3.5" />
+            Edit
+          </Button>
+        </Link>
+      </div>
+      <ProductCard {...product} />
+    </div>
+  )
 }
 
 export default function AdminProducts() {
@@ -65,9 +136,12 @@ export default function AdminProducts() {
   return (
     <div className={`flex flex-col gap-4`}>
       <div>
-        <Button variant="ghost" colorScheme="blue">
-          <Link to="/admin/products-create">Create Product</Link>
-        </Button>
+        <Link to="/admin/products-create" className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+          <Button size="sm" className="h-7 gap-1">
+            <PlusCircle className="h-3.5 w-3.5" />
+            Create Product
+          </Button>
+        </Link>
       </div>
 
 
@@ -75,9 +149,79 @@ export default function AdminProducts() {
 
       {products.error && <h1>Error {products.error.message}</h1>}
 
-      <div className="flex flex-wrap gap-4">
-        {products.data?.products && products.data.products.map(Product)}
-      </div>
+      {products.data?.products &&
+        <Card x-chunk="dashboard-06-chunk-0 ">
+          <CardHeader>
+            <CardTitle>Products</CardTitle>
+            <CardDescription>
+              Manage your products and view their sales performance.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="hidden w-[150px] sm:table-cell">
+                    <span className="sr-only">id</span>
+                  </TableHead>
+                  <TableHead className="hidden w-[150px] sm:table-cell">
+                    <span className="sr-only">img</span>
+                  </TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {products.data.products.map(item => (
+                  <TableRow key={item.id}>
+                    <TableCell className="hidden sm:table-cell">
+                      <h1 className="text-xs">{item.id}</h1>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">
+                      <AspectRatio ratio={16 / 9} className="bg-muted">
+                        <img src='/sample.webp' className="rounded-md object-cover w-full h-full" />
+                      </AspectRatio>
+                    </TableCell>
+                    <TableCell className="sm:table-cell">
+                      {item.name}
+                    </TableCell>
+                    <TableCell className="sm:table-cell">
+                      100$
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            aria-haspopup="true"
+                            size="icon"
+                            variant="ghost"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Toggle menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <Link to={`/admin/products/${item.id}`}>
+                            <DropdownMenuItem>
+                              Edit
+                            </DropdownMenuItem>
+                          </Link>
+                          <DropdownMenuItem>Delete</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      }
     </div>
   )
 }

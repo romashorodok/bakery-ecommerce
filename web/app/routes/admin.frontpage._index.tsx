@@ -26,15 +26,14 @@ type CatalogItem = {
   catalog_id: string,
   product_id: string | null,
   id: string
+  product: Product | null
 }
 
-function useFrontPage() {
-  const loaderData = useLoaderData<typeof loader>()
+export function useFrontPage({ frontPageRoute }: { frontPageRoute: string }) {
 
   const model = useQuery({
     queryKey: ['front-page'],
     queryFn: async () => {
-      const { frontPageRoute = null } = loaderData
       if (!frontPageRoute) {
         console.log("Not found front page route")
         return null
@@ -131,6 +130,8 @@ type Product = { id: string, name: string }
 function useModelSelector({ productsRoute, catalogsRoute, catalogId, catalogItemId }: { productsRoute: string, catalogsRoute: string, catalogId: string, catalogItemId: string }) {
   const { fetch } = useAuthFetch()
 
+  // TODO: May be better than my own
+  // https://ui.shadcn.com/docs/components/combobox
   const Selector = () => {
     const [open, setOpen] = useState<boolean>(false);
     const [product, setProduct] = useState<Product>()
@@ -280,7 +281,7 @@ function CatalogItem({ productsRoute, catalogsRoute, ...props }: CatalogItem & {
       <Button onClick={deleteItem}>Delete</Button>
       <Selector />
     </div>
-    <CatalogCard {...props} />
+    <CatalogCard debug={true}  {...props} />
   </div>
 }
 
@@ -297,30 +298,28 @@ function FrontPageCatalogItems({ catalog_items, catalogsRoute, productsRoute }: 
 }
 
 export default function AdminFrontpageIndex() {
-  const { model } = useFrontPage()
-  const { catalogsRoute, productsRoute } = useLoaderData<typeof loader>()
+  const { catalogsRoute, productsRoute, frontPageRoute } = useLoaderData<typeof loader>()
+  const { model } = useFrontPage({ frontPageRoute: frontPageRoute })
 
   return (
-    <div>
+    <div className="h-full">
       {model.isLoading && <h1>Loading...</h1>}
 
       {model.error && <h1>Error {model.error.message}</h1>}
 
-      <div className="flex flex-col flex-wrap gap-4">
-        {model.data?.front_page &&
-          <div>
-            <FrontPage {...model.data.front_page} />
+      {model.data?.front_page &&
+        <div>
+          <FrontPage {...model.data.front_page} />
 
-            {model.data?.catalog_items &&
-              <div>
-                <FrontPageCatalogItems productsRoute={productsRoute} catalogsRoute={catalogsRoute} catalog_items={model.data.catalog_items} />
-              </div>
-            }
+          {model.data?.catalog_items &&
+            <div>
+              <FrontPageCatalogItems productsRoute={productsRoute} catalogsRoute={catalogsRoute} catalog_items={model.data.catalog_items} />
+            </div>
+          }
 
-            <Catalogs catalogId={model.data.front_page.catalog_id} frontPageId={model.data.front_page.id} />
-          </div>
-        }
-      </div>
+          <Catalogs catalogId={model.data.front_page.catalog_id} frontPageId={model.data.front_page.id} />
+        </div>
+      }
     </div>
   )
 }
