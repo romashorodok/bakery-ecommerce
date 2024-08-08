@@ -1,7 +1,9 @@
 from uuid import UUID
 from sqlalchemy import ForeignKey
 from sqlalchemy.types import BOOLEAN, INT, TEXT
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from bakery_ecommerce.internal.store.persistence.product import Product
 from . import base
 
 
@@ -13,10 +15,11 @@ class CatalogItem(base.PersistanceBase, base.ScalarID):
     position: Mapped[int] = mapped_column("position", INT)
 
     catalog_id: Mapped[UUID] = mapped_column(ForeignKey("catalogs.id"))
+    product_id: Mapped[UUID | None] = mapped_column(ForeignKey("products.id"))
+    product: Mapped[Product | None] = relationship(lazy=False)
 
 
 class Catalog(base.PersistanceBase, base.ScalarID):
     __tablename__ = "catalogs"
 
     headline: Mapped[str] = mapped_column("headline", TEXT)
-    # catalog_items: Mapped[list[CatalogItem]] = relationship(lazy=False)

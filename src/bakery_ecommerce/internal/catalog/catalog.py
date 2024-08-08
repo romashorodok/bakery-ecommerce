@@ -234,5 +234,41 @@ class DeleteCatalogItem:
 
         normalize_position = NormalizeCatalogItemsPosition(params.catalog_id)
         await self.__queries.process(self.__session, normalize_position)
-
         return DeleteCatalogItemResult(result)
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
+class UpdateCatalogItemProductEvent:
+    catalog_id: str
+    catalog_item_id: str
+    product_id: str
+
+    @property
+    def payload(self) -> Self:
+        return self
+
+
+@dataclass
+class UpdateCatalogItemProductResult:
+    catalog_item: CatalogItem | None
+
+
+class UpdateCatalogItemProduct:
+    def __init__(self, session: AsyncSession, queries: QueryProcessor) -> None:
+        self.__session = session
+        self.__queries = queries
+
+    async def execute(
+        self, params: UpdateCatalogItemProductEvent
+    ) -> UpdateCatalogItemProductResult:
+        operation = CrudOperation(
+            CatalogItem,
+            lambda q: q.update_partial(
+                "id",
+                params.catalog_item_id,
+                {"product_id": params.product_id},
+            ),
+        )
+        result = await self.__queries.process(self.__session, operation)
+        return UpdateCatalogItemProductResult(result)

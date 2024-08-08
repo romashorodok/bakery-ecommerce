@@ -124,11 +124,13 @@ async def product_list(
     context: ContextBus = Depends(_product_list_request__context_bus),
     page: int = 0,
     page_size: int = 20,
+    name: str | None = None,
 ):
     await context.publish(
         GetProductListEvent(
             page=page,
             page_size=page_size,
+            name=name,
         )
     )
 

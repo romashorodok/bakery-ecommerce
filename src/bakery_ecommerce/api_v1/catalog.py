@@ -25,6 +25,9 @@ from bakery_ecommerce.internal.catalog.catalog import (
     GetCatalogListResult,
     UpdateCatalog,
     UpdateCatalogEvent,
+    UpdateCatalogItemProduct,
+    UpdateCatalogItemProductEvent,
+    UpdateCatalogItemProductResult,
     UpdateCatalogResult,
 )
 from bakery_ecommerce.internal.store.query import QueryProcessor
@@ -227,6 +230,47 @@ async def delete_catalog_item(
     cmp.reducer(
         DeleteCatalogItemResult,
         lambda resp, result: set_key(resp, "success", result.success),
+    )
+    return cmp.reduce(result.flatten())
+
+
+class ChangeCatalogItemProductRequestBody(BaseModel):
+    product_id: str
+
+
+def _change_catalog_item_product_request__context_bus(
+    context: ContextBus = Depends(dependencies.request_context_bus),
+    tx: AsyncSession = Depends(dependencies.request_transaction),
+    queries: QueryProcessor = Depends(dependencies.request_query_processor),
+) -> ContextBus:
+    update_catalog_item_product = UpdateCatalogItemProduct(tx, queries)
+    return context | ContextExecutor(
+        UpdateCatalogItemProductEvent, lambda q: update_catalog_item_product.execute(q)
+    )
+
+
+@api.put(path="/{catalog_id}/catalog-item/{catalog_item_id}/product")
+async def change_catalog_item_product(
+    catalog_id: str,
+    catalog_item_id: str,
+    body: ChangeCatalogItemProductRequestBody,
+    context: Annotated[
+        ContextBus, Depends(_change_catalog_item_product_request__context_bus)
+    ],
+):
+    await context.publish(
+        UpdateCatalogItemProductEvent(
+            catalog_id=catalog_id,
+            catalog_item_id=catalog_item_id,
+            product_id=body.product_id,
+        )
+    )
+
+    result = await context.gather()
+    cmp = Composable(dict[str, Any]())
+    cmp.reducer(
+        UpdateCatalogItemProductResult,
+        lambda resp, result: set_key(resp, "catalog_item", result.catalog_item),
     )
     return cmp.reduce(result.flatten())
 

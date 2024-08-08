@@ -1,17 +1,19 @@
 import { LoaderFunctionArgs, json } from "@remix-run/cloudflare"
 import { useLoaderData } from "@remix-run/react"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueries, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
 import { Catalog, useCatalogsFetcher } from "./admin.catalogs._index"
-import { Button } from "@chakra-ui/react"
+import { Button, Input } from "@chakra-ui/react"
 import { useAuthFetch } from "~/hooks/useAuthFetch"
 import CatalogCard from "~/components/catalog.card"
-import { useEffect, useMemo } from "react"
+import { FormEvent, useEffect, useMemo, useState } from "react"
+import * as Popover from '@radix-ui/react-popover';
 
 export const loader = async (loader: LoaderFunctionArgs) => {
   const { context: { cloudflare } } = loader
   return json({
     frontPageRoute: cloudflare.env.FRONT_PAGE_ROUTE,
-    catalogsRoute: cloudflare.env.CATALOGS_ROUTE
+    catalogsRoute: cloudflare.env.CATALOGS_ROUTE,
+    productsRoute: cloudflare.env.PRODUCTS_ROUTE,
   })
 }
 
@@ -22,6 +24,7 @@ type CatalogItem = {
   visible: boolean,
   position: number,
   catalog_id: string,
+  product_id: string | null,
   id: string
 }
 
@@ -123,9 +126,140 @@ function Catalogs({ frontPageId, catalogId }: { catalogId: string, frontPageId: 
   </div>
 }
 
-function CatalogItem({ catalogsRoute, ...props }: CatalogItem & { catalogsRoute: string }) {
+type Product = { id: string, name: string }
+
+function useModelSelector({ productsRoute, catalogsRoute, catalogId, catalogItemId }: { productsRoute: string, catalogsRoute: string, catalogId: string, catalogItemId: string }) {
+  const { fetch } = useAuthFetch()
+
+  const Selector = () => {
+    const [open, setOpen] = useState<boolean>(false);
+    const [product, setProduct] = useState<Product>()
+    const [name, setName] = useState<string>("")
+    const [error, setError] = useState<string | undefined>(undefined)
+    const client = useQueryClient()
+
+    const mutateSelectors = useMutation({
+      mutationKey: ["selectors"],
+      mutationFn: async (name: string) => {
+        const response = await fetch(`${productsRoute}?name=${name}`, {
+          headers: {
+            "content-type": "application/json",
+          }
+        })
+        if (!response || !response.ok) {
+          throw new Error("Request error at model selector candidates")
+        }
+        return response.json<{ products: Array<Product> }>()
+      },
+      onSuccess: ({ products }) => {
+        if (products.length >= 1) {
+          setOpen(true)
+        } else {
+          setOpen(false)
+        }
+      }
+    })
+
+    const onChange = async (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault()
+      // @ts-ignore
+      const value = e.target.value
+      mutateSelectors.mutateAsync(value)
+    }
+
+    const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault()
+
+      if (!product) {
+        setError("Select product from list")
+        return
+      }
+
+
+      const response = await fetch(`${catalogsRoute}/${catalogId}/catalog-item/${catalogItemId}/product`, {
+        headers: {
+          "content-type": "application/json"
+        },
+        method: 'PUT',
+        body: JSON.stringify({
+          product_id: product.id,
+        })
+      })
+
+      if (!response || !response.ok) {
+        setError("Unable change product. Server error")
+        return
+      }
+
+      await client.invalidateQueries({ queryKey: ["front-page"] })
+
+      console.log("Submit", product)
+      setProduct(undefined)
+      setName("")
+    }
+
+    const selectOnPopUp = (product: Product) => {
+      setOpen(false)
+      setProduct(product)
+      setName(product.name)
+      setError(undefined)
+    }
+
+    return (
+      <Popover.Root open={true}>
+        <Popover.Trigger asChild>
+          <div>
+            <form method="GET" autoComplete="off" onChange={onChange} onSubmit={onSubmit}>
+              <label style={{ visibility: error ? 'visible' : 'hidden' }}>
+                Error: {error}
+              </label>
+              {product &&
+                <div className="flex flex-col text-sm">
+                  <label>Id: {product.id}</label>
+                  <label>Name: {product.name}</label>
+                </div>
+              }
+              <Input name="value" value={name} onChange={(e) => setName(e.target.value)} />
+              <Button type="submit">Change</Button>
+              <Button onClick={() => setOpen(false)}>Close</Button>
+            </form>
+          </div>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content style={{ visibility: open ? "visible" : "hidden" }}>
+            <div className="flex bg-black text-white p-2">
+              {mutateSelectors.isPending && <h1>Loading...</h1>}
+              {mutateSelectors.data?.products &&
+                <div className="flex flex-col">
+                  {mutateSelectors.data.products.map(p =>
+                    <div key={p.id} onClick={() => selectOnPopUp(p)}>
+                      <h1>Name - {p.name}</h1>
+                      <h1>Id - {p.id}</h1>
+                    </div>
+                  )}
+                </div>
+              }
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    );
+  };
+
+  return {
+    Selector: () => <Selector />
+  };
+}
+
+function CatalogItem({ productsRoute, catalogsRoute, ...props }: CatalogItem & { catalogsRoute: string, productsRoute: string }) {
   const { fetch } = useAuthFetch()
   const client = useQueryClient()
+  const { Selector } = useModelSelector({
+    productsRoute: productsRoute,
+    catalogsRoute: catalogsRoute,
+    catalogId: props.catalog_id,
+    catalogItemId: props.id,
+  })
 
   async function deleteItem() {
     const response = await fetch(`${catalogsRoute}/${props.catalog_id}/catalog-item/${props.id}`, {
@@ -142,26 +276,29 @@ function CatalogItem({ catalogsRoute, ...props }: CatalogItem & { catalogsRoute:
   }
 
   return <div key={props.id}>
-    <Button onClick={deleteItem}>Delete</Button>
+    <div className="flex gap-4">
+      <Button onClick={deleteItem}>Delete</Button>
+      <Selector />
+    </div>
     <CatalogCard {...props} />
   </div>
 }
 
-function FrontPageCatalogItems({ catalog_items, catalogsRoute }: { catalogsRoute: string, catalog_items: Array<CatalogItem> }) {
+function FrontPageCatalogItems({ catalog_items, catalogsRoute, productsRoute }: { productsRoute: string, catalogsRoute: string, catalog_items: Array<CatalogItem> }) {
   const items = useMemo(() =>
     catalog_items.sort((a, b) => a.position - b.position),
     [catalog_items])
 
   return (
     <div className="grid grid-cols-2 gap-4">
-      {items.map(i => <CatalogItem key={i.id} catalogsRoute={catalogsRoute} {...i} />)}
+      {items.map(i => <CatalogItem key={i.id} productsRoute={productsRoute} catalogsRoute={catalogsRoute} {...i} />)}
     </div>
   )
 }
 
 export default function AdminFrontpageIndex() {
   const { model } = useFrontPage()
-  const { catalogsRoute } = useLoaderData<typeof loader>()
+  const { catalogsRoute, productsRoute } = useLoaderData<typeof loader>()
 
   return (
     <div>
@@ -176,7 +313,7 @@ export default function AdminFrontpageIndex() {
 
             {model.data?.catalog_items &&
               <div>
-                <FrontPageCatalogItems catalogsRoute={catalogsRoute} catalog_items={model.data.catalog_items} />
+                <FrontPageCatalogItems productsRoute={productsRoute} catalogsRoute={catalogsRoute} catalog_items={model.data.catalog_items} />
               </div>
             }
 

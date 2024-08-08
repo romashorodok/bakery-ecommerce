@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Any, Self, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.operators import ilike_op
 
 from bakery_ecommerce.context_bus import (
     ContextBus,
@@ -22,6 +23,7 @@ from .store.query import QueryProcessor
 class GetProductListEvent:
     page: int
     page_size: int
+    name: str | None
 
     @property
     def payload(self) -> Self:
@@ -47,6 +49,9 @@ class GetProductList:
             session: AsyncSession,
         ) -> Sequence[persistence.product.Product]:
             stmt = select(product).limit(params.page_size).offset(params.page)
+            if params.name:
+                stmt = stmt.where(product.name.ilike(f"%{params.name}%"))
+
             row = await session.execute(stmt)
             return row.scalars().all()
 
