@@ -18,13 +18,15 @@ export default function AdminProductsCreate() {
 
     // @ts-ignore
     const field = e.target["name"].value
+    // @ts-ignore
+    const price = e.target["price"].value
 
     const result = await fetch(loaderData.productsRoute, {
       headers: {
         "content-type": "application/json",
       },
       method: "POST",
-      body: JSON.stringify({ name: field })
+      body: JSON.stringify({ name: field, price })
 
     })
 
@@ -35,6 +37,7 @@ export default function AdminProductsCreate() {
     <div>
       <form onSubmit={submit} autoComplete="off">
         <input name="name" />
+        <input name="price" type="number" />
 
         <button type="submit">Create</button>
       </form>

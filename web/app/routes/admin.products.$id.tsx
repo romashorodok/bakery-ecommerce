@@ -15,7 +15,7 @@ export const loader = async (loader: LoaderFunctionArgs) => {
   })
 }
 
-type Product = { id: string, name: string }
+type Product = { id: string, name: string, price: number }
 
 export default function AdminProductsById() {
   const loaderData = useLoaderData<typeof loader>()
@@ -70,6 +70,9 @@ export default function AdminProductsById() {
       // @ts-ignore
       const nameField = evt.target["name"].value
 
+      // @ts-ignore
+      const priceField = evt.target["price"].value
+
       if (!data?.product) {
         throw new Error("Original product newer must be null")
       }
@@ -78,6 +81,7 @@ export default function AdminProductsById() {
         model: data.product,
         mutated: {
           name: nameField,
+          price: priceField,
         }
       })
 
@@ -99,6 +103,7 @@ export default function AdminProductsById() {
           <h1>{data.product.id}</h1>
 
           <input defaultValue={data.product.name} name="name" />
+          <input defaultValue={data.product.price} name="price" type="number" />
 
           <button type="submit">Update</button>
           <button type="reset">Reset</button>

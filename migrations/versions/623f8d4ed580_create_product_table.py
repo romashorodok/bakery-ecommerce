@@ -35,6 +35,11 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column(
+            "price",
+            sa.Integer,
+            nullable=False,
+        ),
+        sa.Column(
             "created_at",
             sa.TIMESTAMP(True),
             server_default=sa.text("now()"),

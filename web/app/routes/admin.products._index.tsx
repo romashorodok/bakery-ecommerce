@@ -41,7 +41,7 @@ export const loader = async ({ context: { cloudflare } }: LoaderFunctionArgs) =>
   })
 }
 
-type Product = { id: string, name: string }
+type Product = { id: string, name: string, price: number }
 
 function useProductFetcher() {
   const loaderData = useLoaderData<typeof loader>()
@@ -152,7 +152,7 @@ export default function AdminProducts() {
                       {item.name}
                     </TableCell>
                     <TableCell className="sm:table-cell">
-                      100$
+                      {item.price}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>

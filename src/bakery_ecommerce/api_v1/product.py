@@ -39,6 +39,7 @@ api = fastapi.APIRouter()
 
 class ProductCreateRequestBody(BaseModel):
     name: str
+    price: int
 
 
 def _product_create_request__create_product(
@@ -90,7 +91,7 @@ async def product_create(
     context: Annotated[ContextBus, Depends(_product_create_request__context_bus)],
 ):
     try:
-        await context.publish(CreateProductEvent(body.name))
+        await context.publish(CreateProductEvent(body.name, body.price))
 
         result = await context.gather()
 
@@ -198,6 +199,7 @@ def _update_product_by_id__context_bus(
 class UpdateProductByIdRequestBody(BaseModel):
     name: str | None = None
     description: str | None = None
+    price: int | None = None
 
     @model_validator(mode="before")
     @classmethod

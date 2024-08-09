@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Any, Self, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.operators import ilike_op
 
 from bakery_ecommerce.context_bus import (
     ContextBus,
@@ -94,11 +93,6 @@ class GetProductById:
 
 
 @dataclass
-class CreateProductParams:
-    name: str
-
-
-@dataclass
 @impl_event(ContextEventProtocol[Product])
 class ProductCreatedEvent:
     _payload: Product
@@ -112,6 +106,7 @@ class ProductCreatedEvent:
 @impl_event(ContextEventProtocol)
 class CreateProductEvent:
     name: str
+    price: int
 
     @property
     def payload(self) -> Self:
@@ -127,13 +122,13 @@ class CreateProduct:
         self.__context = context
 
     async def execute(self, params: CreateProductEvent) -> Product:
-        product = await self.__create_product(params.name)
+        product = await self.__create_product(params.name, params.price)
         await self.__session.flush()
         await self.__context.publish(ProductCreatedEvent(product))
         return product
 
-    async def __create_product(self, name: str) -> Product:
-        product = persistence.product.Product(name=name)
+    async def __create_product(self, name: str, price: int) -> Product:
+        product = persistence.product.Product(name=name, price=price)
         operation = CrudOperation(Product, lambda q: q.create_one(product))
         return await self.__queries.process(self.__session, operation)
 
