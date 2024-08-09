@@ -2,8 +2,36 @@ import { useLoaderData, Link } from "@remix-run/react"
 import { json, LoaderFunctionArgs } from "@remix-run/cloudflare"
 import { useAuthFetch } from "~/hooks/useAuthFetch"
 import { useQuery } from "@tanstack/react-query"
-import { Button } from "@chakra-ui/react"
 import { useEffect } from "react"
+
+import {
+  MoreHorizontal,
+} from "lucide-react"
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card"
+
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "~/components/ui/table"
+import { Button } from "~/components/ui/button"
 
 export const loader = async ({ context: { cloudflare } }: LoaderFunctionArgs) => {
   return json({
@@ -56,7 +84,7 @@ export default function AdminCatalogsIndex() {
   return (
     <div className={`flex flex-col gap-4`}>
       <div>
-        <Button variant="ghost" colorScheme="blue">
+        <Button size="sm" className="h-7 gap-1">
           <Link to="/admin/catalogs-create">Create Catalog</Link>
         </Button>
       </div>
@@ -65,9 +93,67 @@ export default function AdminCatalogsIndex() {
 
       {model.error && <h1>Error {model.error.message}</h1>}
 
-      <div className="flex flex-col flex-wrap gap-4">
-        {model.data?.catalogs && model.data.catalogs.map(Catalog)}
-      </div>
+      {model.data?.catalogs &&
+        <Card x-chunk="dashboard-06-chunk-0 ">
+          <CardHeader>
+            <CardTitle>Catalogs</CardTitle>
+            <CardDescription>
+              Manage your catalogs.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="hidden w-[150px] sm:table-cell">
+                    <span className="sr-only">id</span>
+                  </TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {model.data.catalogs.map(item => (
+                  <TableRow key={item.id}>
+                    <TableCell className="hidden sm:table-cell">
+                      <h1 className="text-xs">{item.id}</h1>
+                    </TableCell>
+                    <TableCell className="sm:table-cell">
+                      {item.headline}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            aria-haspopup="true"
+                            size="icon"
+                            variant="ghost"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Toggle menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <Link to={`/admin/catalogs/${item.id}`}>
+                            <DropdownMenuItem>
+                              Edit
+                            </DropdownMenuItem>
+                          </Link>
+                          <DropdownMenuItem>Delete</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      }
     </div>
   )
 }

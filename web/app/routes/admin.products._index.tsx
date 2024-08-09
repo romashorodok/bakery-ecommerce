@@ -7,51 +7,25 @@ import { useAuthFetch } from "~/hooks/useAuthFetch"
 
 import { AspectRatio } from "~/components/ui/aspect-ratio"
 import {
-  Car,
-  File,
-  Home,
-  LineChart,
-  ListFilter,
   MoreHorizontal,
-  Package,
-  Package2,
-  PanelLeft,
   PlusCircle,
-  Search,
-  Settings,
-  ShoppingCart,
-  Users2,
 } from "lucide-react"
 
-import { Badge } from "~/components/ui/badge"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "~/components/ui/breadcrumb"
 import { Button } from "~/components/ui/button"
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
-import { Input } from "~/components/ui/input"
-import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet"
 import {
   Table,
   TableBody,
@@ -60,18 +34,6 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table"
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "~/components/ui/tabs"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "~/components/ui/tooltip"
 
 export const loader = async ({ context: { cloudflare } }: LoaderFunctionArgs) => {
   return json({
@@ -121,7 +83,7 @@ function Product(product: Product) {
           </Button>
         </Link>
       </div>
-      <ProductCard {...product} />
+      <ProductCard debug={true} {...product} />
     </div>
   )
 }
@@ -135,7 +97,7 @@ export default function AdminProducts() {
 
   return (
     <div className={`flex flex-col gap-4`}>
-      <div>
+      <div className="flex justify-end">
         <Link to="/admin/products-create" className="sr-only sm:not-sr-only sm:whitespace-nowrap">
           <Button size="sm" className="h-7 gap-1">
             <PlusCircle className="h-3.5 w-3.5" />

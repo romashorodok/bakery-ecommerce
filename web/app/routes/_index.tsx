@@ -1,9 +1,11 @@
 import { json, LoaderFunctionArgs, type MetaFunction } from "@remix-run/cloudflare";
 import { useLoaderData, useOutletContext } from "@remix-run/react";
-import { useCallback } from "react";
+import { createRef, useCallback } from "react";
 import { useAuthFetch } from "~/hooks/useAuthFetch";
 import { AppContext } from "~/root";
 import CatalogCard from "~/components/catalog.card";
+import { useSize } from "~/lib/resize";
+import { cn } from "~/lib/utils";
 
 export const meta: MetaFunction = () => {
   return [
@@ -48,6 +50,9 @@ export default function Index() {
   const { accessToken } = useOutletContext<AppContext>()
   const { catalog_items } = useLoaderData<typeof loader>()
 
+  const rootDivRef = createRef<HTMLDivElement>()
+  const { width } = useSize(rootDivRef)
+
   const tokenInfo = useCallback(async () => {
     const result = await fetch(`http://localhost:9000/api/identity/token-info`, {
       method: "POST",
@@ -57,8 +62,11 @@ export default function Index() {
   }, [accessToken])
 
   return (
-    <div>
-      <section className="grid grid-cols-2 gap-4">
+    <div ref={rootDivRef}>
+      <section className={cn(
+        "grid gap-4",
+        `${width >= 667 ? 'grid-cols-2' : 'grid-cols-1'}`
+      )}>
         {catalog_items.map(item => <CatalogCard key={item.id} debug={false} {...item} />)}
       </section>
 

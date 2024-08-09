@@ -1,6 +1,12 @@
 import ProductCard from "./product.card"
 
-import { Card, CardBody, CardFooter, Image, Stack, Heading, Text, Divider, ButtonGroup, Button } from '@chakra-ui/react'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card"
+import { AspectRatio } from "~/components/ui/aspect-ratio"
 
 type Product = { id: string, name: string }
 
@@ -14,7 +20,7 @@ type CatalogItem = {
   product: Product | null
 }
 
-export default function({ position, available, visible, catalog_id, id, product_id, product, debug }: CatalogItem & { debug: boolean }) {
+export default function ({ position, available, visible, catalog_id, id, product_id, product, debug }: CatalogItem & { debug: boolean }) {
   return (
     <div key={id}>
       {debug &&
@@ -28,14 +34,24 @@ export default function({ position, available, visible, catalog_id, id, product_
         </div>
       }
       {product
-        ? <ProductCard {...product} />
-        : <Card maxW='sm'>
-          <CardBody>
-            <Image src='' borderRadius='lg' />
-            <Stack mt='4' spacing='2'>
-              <Heading size='md'>Placeholder</Heading>
-            </Stack>
-          </CardBody>
+        ? <ProductCard debug={debug} {...product} />
+        : <Card x-chunk="dashboard-01-chunk-0 z-10">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-xl font-medium">
+              Placeholder
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">$0</div>
+
+            <AspectRatio ratio={16 / 9} className="bg-muted" />
+
+            {debug &&
+              <p className="text-xs text-muted-foreground">
+                {id}
+              </p>
+            }
+          </CardContent>
         </Card>
       }
     </div>

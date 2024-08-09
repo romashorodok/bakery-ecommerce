@@ -1,12 +1,15 @@
 import { LoaderFunctionArgs, json } from "@remix-run/cloudflare"
 import { useLoaderData } from "@remix-run/react"
-import { useMutation, useQueries, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Catalog, useCatalogsFetcher } from "./admin.catalogs._index"
-import { Button, Input } from "@chakra-ui/react"
+import { Input } from "~/components/ui/input"
 import { useAuthFetch } from "~/hooks/useAuthFetch"
 import CatalogCard from "~/components/catalog.card"
-import { FormEvent, useEffect, useMemo, useState } from "react"
+import { FormEvent, useState, useMemo } from "react"
 import * as Popover from '@radix-ui/react-popover';
+import { Button } from "~/components/ui/button"
+import { CircleX } from "lucide-react"
+import { debounce } from "~/lib/debounce"
 
 export const loader = async (loader: LoaderFunctionArgs) => {
   const { context: { cloudflare } } = loader
@@ -51,11 +54,12 @@ export function useFrontPage({ frontPageRoute }: { frontPageRoute: string }) {
 }
 
 function FrontPage(frontPage: FrontPage) {
-  return (
-    <div>
-      {JSON.stringify(frontPage)}
-    </div>
-  )
+  // return (
+  // <div>
+  //   {JSON.stringify(frontPage)}
+  // </div>
+  // )
+  return <></>
 }
 
 function CatalogSelect({ id, headline, frontPageRoute, frontPageId }: Catalog & { frontPageId: number, frontPageRoute: string }) {
@@ -131,6 +135,7 @@ function useModelSelector({ productsRoute, catalogsRoute, catalogId, catalogItem
   const { fetch } = useAuthFetch()
 
   // TODO: May be better than my own
+  // NOTE: Test it it has bad performance
   // https://ui.shadcn.com/docs/components/combobox
   const Selector = () => {
     const [open, setOpen] = useState<boolean>(false);
@@ -161,11 +166,13 @@ function useModelSelector({ productsRoute, catalogsRoute, catalogId, catalogItem
       }
     })
 
+    const debounceMutate = useMemo(() => debounce((val: string) => mutateSelectors.mutateAsync(val), 300), [])
+
     const onChange = async (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault()
       // @ts-ignore
       const value = e.target.value
-      mutateSelectors.mutateAsync(value)
+      debounceMutate(value)
     }
 
     const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -175,7 +182,6 @@ function useModelSelector({ productsRoute, catalogsRoute, catalogId, catalogItem
         setError("Select product from list")
         return
       }
-
 
       const response = await fetch(`${catalogsRoute}/${catalogId}/catalog-item/${catalogItemId}/product`, {
         headers: {
@@ -208,7 +214,7 @@ function useModelSelector({ productsRoute, catalogsRoute, catalogId, catalogItem
 
     return (
       <Popover.Root open={true}>
-        <Popover.Trigger asChild>
+        <Popover.Trigger className="pb-4" asChild>
           <div>
             <form method="GET" autoComplete="off" onChange={onChange} onSubmit={onSubmit}>
               <label style={{ visibility: error ? 'visible' : 'hidden' }}>
@@ -220,9 +226,14 @@ function useModelSelector({ productsRoute, catalogsRoute, catalogId, catalogItem
                   <label>Name: {product.name}</label>
                 </div>
               }
-              <Input name="value" value={name} onChange={(e) => setName(e.target.value)} />
-              <Button type="submit">Change</Button>
-              <Button onClick={() => setOpen(false)}>Close</Button>
+              <div className="flex flex-col gap-2">
+                <div className="relative">
+                  <Input name="value" value={name} onChange={(e) => setName(e.target.value)} className="pr-8" placeholder={`Select a new product for the catalog`} />
+                  <CircleX className="absolute top-[6px] right-[6px] h-4.5 w-4.5" onClick={() => setOpen(false)} />
+                </div>
+
+                <Button type="submit">Change</Button>
+              </div>
             </form>
           </div>
         </Popover.Trigger>
@@ -277,11 +288,16 @@ function CatalogItem({ productsRoute, catalogsRoute, ...props }: CatalogItem & {
   }
 
   return <div key={props.id}>
-    <div className="flex gap-4">
-      <Button onClick={deleteItem}>Delete</Button>
+    <div className="flex flex-col">
+      <div className="flex justify-end">
+        <Button size="sm" className="h-8 gap-1" onClick={deleteItem}>
+          <CircleX className="h-3.5 w-3.5" />
+          Delete
+        </Button>
+      </div>
       <Selector />
     </div>
-    <CatalogCard debug={true}  {...props} />
+    <CatalogCard debug={false}  {...props} />
   </div>
 }
 
