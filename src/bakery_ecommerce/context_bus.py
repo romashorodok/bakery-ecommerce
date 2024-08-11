@@ -1,7 +1,13 @@
+from dataclasses import dataclass
 import inspect
 from typing import Coroutine, Generic, Protocol, Any, Self, TypeVar, Type, Callable
 
 import asyncio
+
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+)
 
 EventPayload_T = TypeVar("EventPayload_T", covariant=True)
 
@@ -11,7 +17,17 @@ class ContextEventProtocol(Protocol[EventPayload_T]):
     def payload(self) -> EventPayload_T: ...
 
 
+class ContextPersistenceEvent:
+    session: AsyncSession
+
+
 _HandlerReturn_T = TypeVar("_HandlerReturn_T", bound=Any)
+
+
+@dataclass
+class ExecutorTask(Generic[_HandlerReturn_T]):
+    task: asyncio.Task[_HandlerReturn_T]
+    event: ContextEventProtocol[_HandlerReturn_T] | ContextPersistenceEvent
 
 
 class ContextExecutor(Generic[_HandlerReturn_T]):
@@ -23,9 +39,22 @@ class ContextExecutor(Generic[_HandlerReturn_T]):
         self.event_type = event_type
         self.handler = handler
 
-    def start(self, event: ContextEventProtocol, loop: asyncio.AbstractEventLoop):
-        self.task = loop.create_task(self.handler(event.payload))
-        return self.task
+    def start(
+        self,
+        event: ContextEventProtocol,
+        loop: asyncio.AbstractEventLoop,
+        session_maker: async_sessionmaker[AsyncSession],
+    ) -> ExecutorTask[_HandlerReturn_T]:
+        async def executor_session_proxy():
+            if isinstance(event, ContextPersistenceEvent):
+                async with session_maker.begin() as tx:
+                    event.session = tx
+                    return await self.handler(event.payload)
+            else:
+                return await self.handler(event.payload)
+
+        task = loop.create_task(executor_session_proxy())
+        return ExecutorTask(task, event)
 
 
 class ResultBox(Generic[_HandlerReturn_T]):
@@ -54,6 +83,7 @@ class Result(Generic[_HandlerReturn_T]):
 class ContextBus(Generic[_HandlerReturn_T]):
     def __init__(
         self,
+        session_maker: async_sessionmaker[AsyncSession],
         executors: dict[str, list[ContextExecutor[_HandlerReturn_T]]] | None = None,
     ) -> None:
         if executors:
@@ -61,7 +91,9 @@ class ContextBus(Generic[_HandlerReturn_T]):
         else:
             self.__executors = dict[str, list[ContextExecutor[_HandlerReturn_T]]]()
 
-        self.__tasks = asyncio.Queue[tuple[str, list[asyncio.Task[_HandlerReturn_T]]]]()
+        self.__session_maker = session_maker
+        self.__running_tasks = list[ExecutorTask[_HandlerReturn_T]]()
+        self.__tasks = asyncio.Queue[tuple[str, list[ExecutorTask[_HandlerReturn_T]]]]()
         self.__lock = asyncio.Lock()
 
     def __or__(
@@ -87,24 +119,31 @@ class ContextBus(Generic[_HandlerReturn_T]):
         event_type_str = str(type(event))
         async with self.__lock:
             if executors := self.__executors.get(event_type_str):
-                tasks = list[asyncio.Task[_HandlerReturn_T]]()
+                tasks = list[ExecutorTask[_HandlerReturn_T]]()
                 for executor in executors:
-                    tasks.append(executor.start(event, asyncio.get_running_loop()))
+                    task = executor.start(
+                        event,
+                        asyncio.get_running_loop(),
+                        self.__session_maker,
+                    )
+                    self.__running_tasks.append(task)
+                    tasks.append(task)
                 await self.__tasks.put((event_type_str, tasks))
 
     async def gather(self) -> Result[_HandlerReturn_T]:
         results: dict[str, list[ResultBox[_HandlerReturn_T]]] = {}
 
         while True:
-            event: tuple[str, list[asyncio.Task[_HandlerReturn_T]]] | None = None
+            event: tuple[str, list[ExecutorTask[_HandlerReturn_T]]] | None = None
 
             async with self.__lock:
                 if not self.__tasks.empty():
                     event = await self.__tasks.get()
 
             if event:
-                event_type_str, tasks = event
+                event_type_str, executorTasks = event
                 try:
+                    tasks = map(lambda q: q.task, executorTasks)
                     completed = await asyncio.gather(*tasks)
                 except Exception as e:
                     print(f"Exception occurred at event context bus: {e}")

@@ -107,4 +107,4 @@ def request_query_processor(
 
 
 def request_context_bus(request: fastapi.Request) -> ContextBus:
-    return cache_request_attr(request, ContextBus())
+    return cache_request_attr(request, ContextBus(session_manager.session_maker()))

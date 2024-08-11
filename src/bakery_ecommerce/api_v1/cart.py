@@ -1,16 +1,15 @@
-import asyncio
 from dataclasses import dataclass
 from typing import Annotated, Any, Self
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from bakery_ecommerce.composable import Composable, set_key
 from bakery_ecommerce.context_bus import (
     ContextBus,
     ContextEventProtocol,
     ContextExecutor,
+    ContextPersistenceEvent,
     impl_event,
 )
 from bakery_ecommerce import dependencies
@@ -39,10 +38,9 @@ api = APIRouter()
 
 def _get_cart_request__context_bus(
     context: ContextBus = Depends(dependencies.request_context_bus),
-    tx: AsyncSession = Depends(dependencies.request_transaction),
     queries: QueryProcessor = Depends(dependencies.request_query_processor),
 ) -> ContextBus:
-    get_user_cart = GetUserCart(context, tx, queries)
+    get_user_cart = GetUserCart(context, queries)
     return context | ContextExecutor(
         GetUserCartEvent, lambda e: get_user_cart.execute(e)
     )
@@ -69,7 +67,7 @@ async def get_cart(
 
 @dataclass
 @impl_event(ContextEventProtocol)
-class AddCartItemComposableEvent:
+class AddCartItemComposableEvent(ContextPersistenceEvent):
     product_id: str
     quantity: int
     user_id: UUID
@@ -84,12 +82,11 @@ class AddCartItemComposableEvent:
 
 def _add_cart_item_request__context_bus(
     context: ContextBus = Depends(dependencies.request_context_bus),
-    tx: AsyncSession = Depends(dependencies.request_transaction),
     queries: QueryProcessor = Depends(dependencies.request_query_processor),
 ) -> ContextBus:
-    _get_user_cart = GetUserCart(context, tx, queries)
-    _user_cart_add_cart_item = UserCartAddCartItem(tx, queries)
-    _get_product_by_id = GetProductById(context, tx, queries)
+    _get_user_cart = GetUserCart(context, queries)
+    _user_cart_add_cart_item = UserCartAddCartItem(queries)
+    _get_product_by_id = GetProductById(context, queries)
 
     root_event: AddCartItemComposableEvent
 
@@ -98,7 +95,8 @@ def _add_cart_item_request__context_bus(
         root_event = e
         await context.publish(GetUserCartEvent(e.user_id))
         # TODO: sometimes this fires 500
-        # sqlalchemy.exc.InvalidRequestError: Can't operate on closed transaction inside context manager.  Please complete the context manager before emitting further commands.
+        # sqlalchemy.exc.InvalidRequestError: Can't operate on closed transaction inside context manager. Please complete the context manager before emitting further commands.
+        # sqlalchemy.exc.InvalidRequestError: This session is provisioning a new connection; concurrent operations are not permitted (Background on this error at: https://sqlalche.me/e/20/isce)
         # Why tx is closed ???
         # Same error may be reproduced async with self.__session.begin_nested():
         await context.publish(GetProductByIdEvent(e.product_id))
@@ -152,12 +150,13 @@ async def add_cart_item(
     if not user_id:
         raise HTTPException(status_code=401, detail="Missing user_id for add_cart_item")
 
-    event = AddCartItemComposableEvent(
-        product_id=product_id,
-        user_id=user_id,
-        quantity=body.quantity,
+    await context.publish(
+        AddCartItemComposableEvent(
+            product_id=product_id,
+            user_id=user_id,
+            quantity=body.quantity,
+        )
     )
-    await context.publish(event)
 
     try:
         result = await context.gather()

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.exc import NoResultFound
@@ -23,11 +22,8 @@ class GetUserCartResult:
 
 
 class GetUserCart:
-    def __init__(
-        self, context: ContextBus, session: AsyncSession, queries: QueryProcessor
-    ) -> None:
+    def __init__(self, context: ContextBus, queries: QueryProcessor) -> None:
         self.__context = context
-        self.__session = session
         self.__queries = queries
 
     async def execute(self, params: GetUserCartEvent) -> GetUserCartResult:
@@ -45,7 +41,7 @@ class GetUserCart:
             except Exception as e:
                 raise ValueError(f"Unable get or create cart. Err: {e}")
 
-        result = await self.__queries.process(self.__session, CustomBuilder(query))
+        result = await self.__queries.process(params.session, CustomBuilder(query))
         await self.__context.publish(UserCartRetrievedEvent(result))
         return GetUserCartResult(result)
 
@@ -59,8 +55,7 @@ class ProductAlreadyInCart(Exception): ...
 
 
 class UserCartAddCartItem:
-    def __init__(self, session: AsyncSession, queries: QueryProcessor) -> None:
-        self.__session = session
+    def __init__(self, queries: QueryProcessor) -> None:
         self.__queries = queries
 
     async def execute(
@@ -76,7 +71,7 @@ class UserCartAddCartItem:
         cart_item.quantity = params.quantity
 
         result = await self.__queries.process(
-            self.__session,
+            params.session,
             CrudOperation(CartItem, lambda q: q.create_one(cart_item)),
         )
         return UserCartAddCartItemResult(result)

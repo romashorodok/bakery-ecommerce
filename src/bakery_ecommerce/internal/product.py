@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bakery_ecommerce.context_bus import (
     ContextBus,
     ContextEventProtocol,
+    ContextPersistenceEvent,
     impl_event,
 )
 from bakery_ecommerce.internal.product_events import ProductByIdRetrievedEvent
@@ -62,7 +63,7 @@ class GetProductList:
 
 @dataclass
 @impl_event(ContextEventProtocol)
-class GetProductByIdEvent:
+class GetProductByIdEvent(ContextPersistenceEvent):
     product_id: str
 
     @property
@@ -79,16 +80,14 @@ class GetProductById:
     def __init__(
         self,
         context: ContextBus,
-        session: AsyncSession,
         queries: store.query.QueryProcessor,
     ) -> None:
         self.__context = context
         self.__queries = queries
-        self.__session = session
 
     async def execute(self, params: GetProductByIdEvent) -> GetProductByIdResult:
         result = await self.__queries.process(
-            self.__session,
+            params.session,
             store.crud_queries.CrudOperation(
                 persistence.product.Product,
                 lambda q: q.get_one_by_field("id", params.product_id),

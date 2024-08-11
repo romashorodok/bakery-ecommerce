@@ -80,3 +80,8 @@ class DatabaseSessionManager:
             raise e
         finally:
             await session.close()
+
+    def session_maker(self) -> async_sessionmaker[AsyncSession]:
+        if not self.__engine or not self.__session_maker:
+            raise Exception("DatabaseSessionManager is not initialized")
+        return self.__session_maker
