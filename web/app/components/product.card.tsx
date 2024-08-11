@@ -5,10 +5,11 @@ import {
   CardTitle,
 } from "~/components/ui/card"
 import { AspectRatio } from "~/components/ui/aspect-ratio"
+import { PropsWithChildren } from "react"
 
 type Product = { id: string, name: string }
 
-export default function ({ id, name, debug }: Product & { debug: boolean }) {
+export default function ({ id, name, debug, children }: PropsWithChildren<Product & { debug: boolean }>) {
   return (
     <Card x-chunk="dashboard-01-chunk-0 z-10">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -16,7 +17,7 @@ export default function ({ id, name, debug }: Product & { debug: boolean }) {
           {name}
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-2">
         <div className="text-2xl font-bold">$45</div>
 
         <AspectRatio ratio={16 / 9} className="bg-muted">
@@ -28,6 +29,9 @@ export default function ({ id, name, debug }: Product & { debug: boolean }) {
             {id}
           </p>
         }
+        <section className="self-end">
+          {children}
+        </section>
       </CardContent>
     </Card>
   )

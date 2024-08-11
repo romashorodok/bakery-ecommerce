@@ -35,6 +35,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet"
 import { Input } from "~/components/ui/input"
 import { Button } from "~/components/ui/button"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const session = await getSession(request.headers.get("Cookie"))
@@ -63,6 +64,7 @@ export function AccessTokenProvider({ children }: PropsWithChildren) {
 }
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const [client,] = useState(() => new QueryClient())
   return (
     <html lang="en">
       <head>
@@ -72,13 +74,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        <AccessTokenProvider>
-          <ChakraProvider>
-            {children}
-          </ChakraProvider>
-          <ScrollRestoration />
-          <Scripts />
-        </AccessTokenProvider >
+        <QueryClientProvider client={client}>
+          <AccessTokenProvider>
+            <ChakraProvider>
+              {children}
+            </ChakraProvider>
+            <ScrollRestoration />
+            <Scripts />
+          </AccessTokenProvider >
+        </QueryClientProvider>
       </body>
     </html>
   );
@@ -158,6 +162,7 @@ export default function App() {
 
       </Sheet>
       <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
+
         <form className="ml-auto flex-1 sm:flex-initial">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -168,6 +173,9 @@ export default function App() {
             />
           </div>
         </form>
+
+        <Button onClick={() => navigate("/cart")}>Cart</Button>
+
         {accessToken
           ? <DropdownMenu>
             <DropdownMenuTrigger asChild>

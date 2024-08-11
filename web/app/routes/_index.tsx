@@ -6,6 +6,9 @@ import { AppContext } from "~/root";
 import CatalogCard from "~/components/catalog.card";
 import { useSize } from "~/lib/resize";
 import { cn } from "~/lib/utils";
+import { Button } from "~/components/ui/button";
+import { ShoppingBag } from "lucide-react"
+import { useAddToCart } from "~/hooks/useCart";
 
 export const meta: MetaFunction = () => {
   return [
@@ -35,20 +38,26 @@ export const loader = async (loader: LoaderFunctionArgs) => {
   const { context: { cloudflare } } = loader
 
   const response = await fetch(cloudflare.env.FRONT_PAGE_ROUTE)
-  if (!response || !response.ok)
+  if (!response || !response.ok) {
     throw new Error('Something goes wrong...')
+  }
 
   const data = await response.json<{
     front_page: FrontPage,
     catalog_items: Array<CatalogItem>
   }>()
-  return json({ catalog_items: data.catalog_items.sort((a, b) => a.position - b.position) })
+
+  return json({
+    catalog_items: data.catalog_items.sort((a, b) => a.position - b.position),
+    cartRoute: cloudflare.env.CART_ROUTE,
+  })
 }
 
 export default function Index() {
+  const { catalog_items, cartRoute } = useLoaderData<typeof loader>()
+  const { addToCartMutation } = useAddToCart({ cartRoute })
   const { fetch } = useAuthFetch()
   const { accessToken } = useOutletContext<AppContext>()
-  const { catalog_items } = useLoaderData<typeof loader>()
 
   const rootDivRef = createRef<HTMLDivElement>()
   const { width } = useSize(rootDivRef)
@@ -61,13 +70,31 @@ export default function Index() {
     console.log(await result.json())
   }, [accessToken])
 
+  const addToCart = (productId: string | null) => {
+    if (!productId) {
+      throw new Error("Unable add product to cart. Not found productId")
+    }
+
+    addToCartMutation.mutateAsync({
+      quantity: 1,
+      productId,
+    })
+  }
+
   return (
     <div ref={rootDivRef}>
       <section className={cn(
         "grid gap-4",
         `${width >= 667 ? 'grid-cols-2' : 'grid-cols-1'}`
       )}>
-        {catalog_items.map(item => <CatalogCard key={item.id} debug={false} {...item} />)}
+        {catalog_items.map(item =>
+          <CatalogCard key={item.id} debug={false} {...item}>
+            <Button size="sm" className="top-[5px] right-[10px] h-7 gap-1" onClick={() => addToCart(item.product_id)} >
+              <ShoppingBag className="h-3.5 w-3.5" />
+              Buy
+            </Button>
+          </CatalogCard>
+        )}
       </section>
 
       <button onClick={() => tokenInfo()}>Verify</button>
@@ -95,6 +122,6 @@ export default function Index() {
           </a>
         </li>
       </ul>
-    </div>
+    </div >
   );
 }

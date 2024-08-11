@@ -8,6 +8,7 @@ from bakery_ecommerce.context_bus import (
     ContextEventProtocol,
     impl_event,
 )
+from bakery_ecommerce.internal.product_events import ProductByIdRetrievedEvent
 
 from . import store
 from .store import persistence
@@ -76,8 +77,12 @@ class GetProductByIdResult:
 
 class GetProductById:
     def __init__(
-        self, session: AsyncSession, queries: store.query.QueryProcessor
+        self,
+        context: ContextBus,
+        session: AsyncSession,
+        queries: store.query.QueryProcessor,
     ) -> None:
+        self.__context = context
         self.__queries = queries
         self.__session = session
 
@@ -89,6 +94,9 @@ class GetProductById:
                 lambda q: q.get_one_by_field("id", params.product_id),
             ),
         )
+        if result:
+            print("publish product")
+            await self.__context.publish(ProductByIdRetrievedEvent(result))
         return GetProductByIdResult(result)
 
 

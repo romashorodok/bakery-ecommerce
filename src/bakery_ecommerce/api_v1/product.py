@@ -153,7 +153,7 @@ def _product_by_id_request__context_bus(
     tx: AsyncSession = Depends(dependencies.request_transaction),
     queries: QueryProcessor = Depends(dependencies.request_query_processor),
 ) -> ContextBus:
-    get_product_by_id = GetProductById(tx, queries)
+    get_product_by_id = GetProductById(context, tx, queries)
     return context | ContextExecutor(
         GetProductByIdEvent,
         lambda e: get_product_by_id.execute(e),

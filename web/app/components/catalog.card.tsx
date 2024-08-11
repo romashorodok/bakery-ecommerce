@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "~/components/ui/card"
 import { AspectRatio } from "~/components/ui/aspect-ratio"
+import { PropsWithChildren } from "react"
 
 type Product = { id: string, name: string }
 
@@ -20,7 +21,7 @@ type CatalogItem = {
   product: Product | null
 }
 
-export default function ({ position, available, visible, catalog_id, id, product_id, product, debug }: CatalogItem & { debug: boolean }) {
+export default function ({ position, available, visible, catalog_id, id, product_id, product, debug, children }: PropsWithChildren<CatalogItem & { debug: boolean }>) {
   return (
     <div key={id}>
       {debug &&
@@ -34,7 +35,9 @@ export default function ({ position, available, visible, catalog_id, id, product
         </div>
       }
       {product
-        ? <ProductCard debug={debug} {...product} />
+        ? (
+          <ProductCard debug={debug} {...product}>{children}</ProductCard>
+        )
         : <Card x-chunk="dashboard-01-chunk-0 z-10">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xl font-medium">
