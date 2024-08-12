@@ -12,7 +12,7 @@ import {
 import "./tailwind.css";
 import { LoaderFunctionArgs } from "@remix-run/server-runtime";
 import { getSession } from "./session.server";
-import { createContext, Dispatch, PropsWithChildren, SetStateAction, useContext, useEffect, useState } from "react";
+import { createContext, createRef, Dispatch, PropsWithChildren, RefObject, SetStateAction, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ChakraProvider } from '@chakra-ui/react'
 
 import {
@@ -36,6 +36,9 @@ import { Sheet, SheetContent, SheetTrigger } from "~/components/ui/sheet"
 import { Input } from "~/components/ui/input"
 import { Button } from "~/components/ui/button"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useSize } from "./lib/resize";
+import { debounce } from "./lib/debounce";
+import { SizeContext } from "./hooks/useResponsive";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const session = await getSession(request.headers.get("Cookie"))
@@ -63,8 +66,30 @@ export function AccessTokenProvider({ children }: PropsWithChildren) {
   </AccessTokenContext.Provider>
 }
 
+export function SizeProvider({ children, element }: PropsWithChildren<{ element: RefObject<HTMLDivElement> }>) {
+  const { width } = useSize(element)
+  const [_width, setWidth] = useState(width)
+
+  const debounceWidth = useMemo(() => debounce((width: number) => {
+    setWidth(width)
+    console.log("Size width", width)
+  }, 200), [])
+
+  useEffect(() => {
+    debounceWidth(width)
+  }, [width])
+
+  return (
+    <SizeContext.Provider value={{ width: _width }}>
+      {children}
+    </SizeContext.Provider>
+  )
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const [client,] = useState(() => new QueryClient())
+  const root = createRef<HTMLDivElement>()
+
   return (
     <html lang="en">
       <head>
@@ -77,7 +102,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <QueryClientProvider client={client}>
           <AccessTokenProvider>
             <ChakraProvider>
-              {children}
+              <SizeProvider element={root}>
+                <div ref={root}>
+                  {children}
+                </div>
+              </SizeProvider>
             </ChakraProvider>
             <ScrollRestoration />
             <Scripts />
@@ -116,8 +145,11 @@ export default function App() {
     console.log(pathSegments)
   }, [])
 
-  return <main className="flex min-h-screen w-full flex-col">
-    <header className="z-50 sticky top-0 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
+  // className="z-50 sticky top-0 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6"
+  return <div className="flex min-h-screen max-h-screen w-full flex-col">
+    <header
+      className="z-50 sticky top-0 flex py-[16px] items-center gap-4 border-b bg-background px-4 md:px-6"
+    >
       <nav className="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6">
         {navItems.map(({ label, to }) => (
           <Link to={to} key={to}
@@ -207,8 +239,8 @@ export default function App() {
         }
       </div>
     </header>
-    <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8 bg-muted/40 overflow-scroll">
+    <main className="flex flex-1 flex-col min-h-full gap-4 p-4 md:gap-8 md:p-8 bg-muted/40 overflow-auto">
       <Outlet context={{ setAccessToken, accessToken }} />
     </main>
-  </main >
+  </div>
 }

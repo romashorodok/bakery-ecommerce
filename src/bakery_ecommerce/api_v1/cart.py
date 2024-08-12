@@ -94,11 +94,6 @@ def _add_cart_item_request__context_bus(
         nonlocal root_event
         root_event = e
         await context.publish(GetUserCartEvent(e.user_id))
-        # TODO: sometimes this fires 500
-        # sqlalchemy.exc.InvalidRequestError: Can't operate on closed transaction inside context manager. Please complete the context manager before emitting further commands.
-        # sqlalchemy.exc.InvalidRequestError: This session is provisioning a new connection; concurrent operations are not permitted (Background on this error at: https://sqlalche.me/e/20/isce)
-        # Why tx is closed ???
-        # Same error may be reproduced async with self.__session.begin_nested():
         await context.publish(GetProductByIdEvent(e.product_id))
 
     async def addCartItemComposableWaiter(
@@ -125,13 +120,11 @@ def _add_cart_item_request__context_bus(
     return (
         context
         | ContextExecutor(AddCartItemComposableEvent, publish_get_user_cart_event)
-        | ContextExecutor(GetUserCartEvent, lambda e: _get_user_cart.execute(e))
-        | ContextExecutor(GetProductByIdEvent, lambda e: _get_product_by_id.execute(e))
+        | ContextExecutor(GetUserCartEvent, _get_user_cart.execute)
+        | ContextExecutor(GetProductByIdEvent, _get_product_by_id.execute)
         | ContextExecutor(UserCartRetrievedEvent, addCartItemComposableWaiter)
         | ContextExecutor(ProductByIdRetrievedEvent, addCartItemComposableWaiter)
-        | ContextExecutor(
-            UserCartAddCartItemEvent, lambda e: _user_cart_add_cart_item.execute(e)
-        )
+        | ContextExecutor(UserCartAddCartItemEvent, _user_cart_add_cart_item.execute)
     )
 
 

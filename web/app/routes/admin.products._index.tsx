@@ -2,7 +2,6 @@ import { json, LoaderFunctionArgs } from "@remix-run/cloudflare"
 import { Link, useLoaderData } from "@remix-run/react"
 import { useQuery } from "@tanstack/react-query"
 import { useEffect } from "react"
-import ProductCard from "~/components/product.card"
 import { useAuthFetch } from "~/hooks/useAuthFetch"
 
 import { AspectRatio } from "~/components/ui/aspect-ratio"
@@ -72,22 +71,6 @@ function useProductFetcher() {
   }
 }
 
-function Product(product: Product) {
-  return (
-    <div key={product.id}>
-      <div className="flex justify-end py-2">
-        <Link to={`/admin/products/${product.id}`} className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-          <Button size="sm" className="top-[5px] right-[10px] h-7 gap-1">
-            <PlusCircle className="h-3.5 w-3.5" />
-            Edit
-          </Button>
-        </Link>
-      </div>
-      <ProductCard debug={true} {...product} />
-    </div>
-  )
-}
-
 export default function AdminProducts() {
   const { products } = useProductFetcher()
 
@@ -112,7 +95,7 @@ export default function AdminProducts() {
       {products.error && <h1>Error {products.error.message}</h1>}
 
       {products.data?.products &&
-        <Card x-chunk="dashboard-06-chunk-0 ">
+        <Card x-chunk="dashboard-06-chunk-0">
           <CardHeader>
             <CardTitle>Products</CardTitle>
             <CardDescription>
