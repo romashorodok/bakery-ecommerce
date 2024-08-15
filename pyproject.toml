@@ -15,6 +15,7 @@ asyncpg = "^0.29.0"
 joserfc = "^1.0.0"
 bcrypt = "^4.2.0"
 nats-py = "^2.8.0"
+stripe = "^10.7.0"
 
 
 [tool.poetry.group.dev.dependencies]

@@ -150,7 +150,6 @@ async def product_list(
 
 def _product_by_id_request__context_bus(
     context: ContextBus = Depends(dependencies.request_context_bus),
-    tx: AsyncSession = Depends(dependencies.request_transaction),
     queries: QueryProcessor = Depends(dependencies.request_query_processor),
 ) -> ContextBus:
     get_product_by_id = GetProductById(context, queries)

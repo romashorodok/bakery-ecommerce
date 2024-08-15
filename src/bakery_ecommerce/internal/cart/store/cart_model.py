@@ -9,3 +9,15 @@ class Cart(PersistanceBase, ScalarID):
 
     user_id: Mapped[UUID] = mapped_column()
     cart_items: Mapped[list[CartItem]] = relationship(lazy=False)
+
+    @property
+    def total_price(self) -> float:
+        return sum(item.product.price * item.quantity for item in self.cart_items)
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "user_id": str(self.user_id),
+            "cart_items": self.cart_items,
+            "total_price": self.total_price,
+        }

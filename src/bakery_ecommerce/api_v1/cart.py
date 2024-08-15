@@ -25,6 +25,7 @@ from bakery_ecommerce.internal.cart.cart_use_cases import (
     UserCartAddCartItem,
     UserCartAddCartItemResult,
 )
+from bakery_ecommerce.internal.cart.store.cart_item_model import CartItem
 from bakery_ecommerce.internal.cart.store.cart_model import Cart
 from bakery_ecommerce.internal.identity.token import Token
 from bakery_ecommerce.internal.product import GetProductById, GetProductByIdEvent
@@ -60,7 +61,8 @@ async def get_cart(
     result = await context.gather()
     cmp = Composable(dict[str, Any]())
     cmp.reducer(
-        GetUserCartResult, lambda resp, result: set_key(resp, "cart", result.cart)
+        GetUserCartResult,
+        lambda resp, result: set_key(resp, "cart", result.cart.to_dict()),
     )
     return cmp.reduce(result.flatten())
 

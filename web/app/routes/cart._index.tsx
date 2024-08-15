@@ -1,5 +1,5 @@
 import { json, LoaderFunctionArgs } from "@remix-run/cloudflare"
-import { useLoaderData, useNavigate } from "@remix-run/react"
+import { Link, useLoaderData, useNavigate } from "@remix-run/react"
 import { useQuery } from "@tanstack/react-query"
 import { useAuthFetch } from "~/hooks/useAuthFetch"
 import { sessionProtectedLoader } from "~/session.server"
@@ -69,7 +69,7 @@ export const loader = async (loader: LoaderFunctionArgs) => {
 
 type Product = { price: number, name: string, updated_at: string, created_at: string, id: string }
 type CartItem = { cart_id: string, product_id: string, quantity: number, id: string, product: Product }
-type Cart = { user_id: string, id: string, cart_items: Array<CartItem> }
+type Cart = { user_id: string, id: string, cart_items: Array<CartItem>, total_price: int }
 
 function CartItemView({ id, quantity, product: { name, price } }: CartItem) {
   return (
@@ -153,9 +153,6 @@ export default function CartIndex() {
       )}>
         <div className={"flex-[2] flex flex-col gap-2 px-2 overflow-scroll"}>
           {model.data.cart.cart_items.map(CartItemView)}
-          {model.data.cart.cart_items.map(CartItemView)}
-          {model.data.cart.cart_items.map(CartItemView)}
-          {model.data.cart.cart_items.map(CartItemView)}
         </div>
         <div className="flex-[1]">
           <Card
@@ -185,25 +182,27 @@ export default function CartIndex() {
                 <ul className="grid gap-3">
                   <li className="flex items-center justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span>$299.00</span>
+                    <span>$0</span>
                   </li>
                   <li className="flex items-center justify-between">
                     <span className="text-muted-foreground">Shipping</span>
-                    <span>$5.00</span>
+                    <span>$0</span>
                   </li>
                   <li className="flex items-center justify-between">
                     <span className="text-muted-foreground">Tax</span>
-                    <span>$25.00</span>
+                    <span>$0</span>
                   </li>
                   <li className="flex items-center justify-between font-semibold">
                     <span className="text-muted-foreground">Total</span>
-                    <span>$329.00</span>
+                    <span>${model.data.cart.total_price}</span>
                   </li>
                 </ul>
               </div>
             </CardContent>
             <CardFooter className="flex flex-row border-t bg-muted/50 px-6 py-3">
-              <Button className="w-full">Submit</Button>
+              <Link to="/checkout">
+                <Button className="w-full">Submit</Button>
+              </Link>
             </CardFooter>
           </Card>
         </div>
