@@ -16,6 +16,7 @@ CATALOGS_ROUTE = "http://localhost:9000/api/catalogs"
 FRONT_PAGE_ROUTE = "http://localhost:9000/api/front-page"
 CART_ROUTE = "http://localhost:9000/api/carts"
 PAYMENT_ROUTE = "http://localhost:9000/api/payments"
+ORDER_ROUTE = "http://localhost:9000/api/orders"
 
 [site]
 bucket = "./build/client"
