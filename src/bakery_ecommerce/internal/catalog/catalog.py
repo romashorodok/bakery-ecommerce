@@ -226,7 +226,7 @@ class DeleteCatalogItem:
 
     async def execute(self, params: DeleteCatalogItemEvent) -> DeleteCatalogItemResult:
         operation = CrudOperation(
-            CatalogItem, lambda q: q.remote_by_field("id", params.catalog_item_id)
+            CatalogItem, lambda q: q.remove_by_field("id", params.catalog_item_id)
         )
         result = await self.__queries.process(self.__session, operation)
         if not isinstance(result, bool):

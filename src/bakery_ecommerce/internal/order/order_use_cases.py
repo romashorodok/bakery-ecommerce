@@ -1,22 +1,31 @@
 from dataclasses import dataclass
+from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy import and_, select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bakery_ecommerce.context_bus import ContextBus
+from bakery_ecommerce.internal.cart.store.cart_item_model import CartItem
+from bakery_ecommerce.internal.order.billing import Billing
 from bakery_ecommerce.internal.order.order_events import (
+    CartItemsToOrderItemsEvent,
     ChangePaymentMethodEvent,
     GetUserDraftOrderEvent,
-    GetUserDraftOrderRetrievedEvent,
+    UserDraftOrderRetrievedEvent,
 )
 from bakery_ecommerce.internal.order.store.order_model import (
     Order,
     Order_Status_Enum,
+    OrderItem,
     PaymentDetail,
 )
-from bakery_ecommerce.internal.store.crud_queries import CrudOperation, CustomBuilder
+from bakery_ecommerce.internal.store.crud_queries import (
+    CrudOperation,
+    CustomBuilder,
+)
 from bakery_ecommerce.internal.store.query import QueryProcessor
+from bakery_ecommerce.utils import get_model_dict
 
 
 @dataclass
@@ -39,7 +48,7 @@ class GetUserDraftOrder:
             )
             try:
                 result = await session.execute(stmt)
-                return result.scalar_one()
+                return result.unique().scalar_one()
             except NoResultFound:
                 order = Order()
                 order.user_id = params.user_id
@@ -55,14 +64,14 @@ class GetUserDraftOrder:
                 raise ValueError(f"Unable get or create order. Err: {e}")
 
         result = await self.__queries.process(params.session, CustomBuilder(query))
-        await self.__context.publish(GetUserDraftOrderRetrievedEvent(order=result))
+        await self.__context.publish(UserDraftOrderRetrievedEvent(order=result))
         return GetUserDraftOrderResult(result)
 
 
-class NotModifiedPaymentProvider(HTTPException):
+class NotModifiedPaymentProviderError(HTTPException):
     def __init__(self, provider: str) -> None:
         super().__init__(
-            304, f"Not modified payment provider. Current provider {provider}", None
+            200, f"Not modified payment provider. Current provider {provider}", None
         )
 
 
@@ -77,7 +86,7 @@ class ChangePaymentMethod:
 
     async def execute(self, params: ChangePaymentMethodEvent):
         if params.order.payment_detail.payment_provider == params.provider:
-            raise NotModifiedPaymentProvider(params.provider)
+            raise NotModifiedPaymentProviderError(params.provider)
 
         operation = CrudOperation(
             PaymentDetail,
@@ -89,3 +98,92 @@ class ChangePaymentMethod:
         )
         result = await self.__queries.process(params.session, operation)
         return ChangePaymentMethodResult(result)
+
+
+class EmptyCartItemsError(HTTPException):
+    def __init__(self) -> None:
+        super().__init__(400, "Cart is empty. Cannot proceed with checkout.", None)
+
+
+@dataclass
+class CartItemsToOrderItems:
+    def __init__(self, queries: QueryProcessor, billing: Billing) -> None:
+        self.__queries = queries
+        self.__billing = billing
+
+    async def execute(self, params: CartItemsToOrderItemsEvent):
+        cart_items = params.cart.cart_items
+        if len(cart_items) == 0:
+            raise EmptyCartItemsError()
+
+        await self.__sanitize_order_items(
+            params.session, params.order.order_items, cart_items
+        )
+        await self.__create_or_update_order_items(
+            params.session, params.order, cart_items
+        )
+        await params.session.flush()
+
+        # TODO: Use like facade/bridge in which provide payment vendor related logic like price calc because at payment intent price will be calc differently at my side and stripe
+        return
+
+    async def __create_or_update_order_items(
+        self,
+        session: AsyncSession,
+        order: Order,
+        cart_items: list[CartItem],
+    ):
+        existing_order_items = {i.product_id: i for i in order.order_items}
+
+        for cart_item in cart_items:
+            if cart_item.product_id in existing_order_items:
+                order_item = existing_order_items[cart_item.product_id]
+                order_item.quantity = cart_item.quantity
+                order_item.price = cart_item.product.price
+
+                price_multiplied, price_multiplier = (
+                    self.__billing.convert_price_to_price_with_cents(order_item.price)
+                )
+                order_item.price_multiplied = price_multiplied
+                order_item.price_multiplier = price_multiplier
+
+                order_item_dict = get_model_dict(order_item)
+                operation = CrudOperation(
+                    OrderItem,
+                    lambda q: q.update_partial("id", order_item.id, order_item_dict),
+                )
+                await self.__queries.process(session, operation)
+            else:
+                order_item = OrderItem()
+                order_item.order_id = order.id
+                order_item.product_id = cart_item.product_id
+
+                order_item.price = cart_item.product.price
+                order_item.quantity = cart_item.quantity
+
+                price_multiplied, price_multiplier = (
+                    self.__billing.convert_price_to_price_with_cents(order_item.price)
+                )
+                order_item.price_multiplied = price_multiplied
+                order_item.price_multiplier = price_multiplier
+                session.add(order_item)
+
+    async def __sanitize_order_items(
+        self,
+        session: AsyncSession,
+        order_items: list[OrderItem],
+        cart_items: list[CartItem],
+    ):
+        cart_product_ids = map(lambda i: i.product_id, cart_items)
+        items_ids_to_delete = list[UUID]()
+
+        for order_item in order_items:
+            if order_item.product_id not in cart_product_ids:
+                items_ids_to_delete.append(order_item.id)
+
+        await self.__queries.process(
+            session,
+            CrudOperation(
+                OrderItem, lambda q: q.remove_many_by_field("id", items_ids_to_delete)
+            ),
+        )

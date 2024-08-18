@@ -6,6 +6,7 @@ from bakery_ecommerce.context_bus import (
     ContextPersistenceEvent,
     impl_event,
 )
+from bakery_ecommerce.internal.cart.store.cart_model import Cart
 from bakery_ecommerce.internal.order.store.order_model import (
     Order,
     Payment_Provider_Enum,
@@ -24,7 +25,7 @@ class GetUserDraftOrderEvent(ContextPersistenceEvent):
 
 @dataclass
 @impl_event(ContextEventProtocol)
-class GetUserDraftOrderRetrievedEvent:
+class UserDraftOrderRetrievedEvent:
     order: Order
 
     @property
@@ -37,6 +38,17 @@ class GetUserDraftOrderRetrievedEvent:
 class ChangePaymentMethodEvent(ContextPersistenceEvent):
     order: Order
     provider: Payment_Provider_Enum
+
+    @property
+    def payload(self) -> Self:
+        return self
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
+class CartItemsToOrderItemsEvent(ContextPersistenceEvent):
+    cart: Cart
+    order: Order
 
     @property
     def payload(self) -> Self:

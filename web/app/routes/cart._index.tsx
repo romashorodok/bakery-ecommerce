@@ -1,6 +1,6 @@
 import { json, LoaderFunctionArgs } from "@remix-run/cloudflare"
 import { Link, useLoaderData, useNavigate } from "@remix-run/react"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useAuthFetch } from "~/hooks/useAuthFetch"
 import { sessionProtectedLoader } from "~/session.server"
 import {
@@ -69,9 +69,26 @@ export const loader = async (loader: LoaderFunctionArgs) => {
 
 type Product = { price: number, name: string, updated_at: string, created_at: string, id: string }
 type CartItem = { cart_id: string, product_id: string, quantity: number, id: string, product: Product }
-type Cart = { user_id: string, id: string, cart_items: Array<CartItem>, total_price: int }
+type Cart = { user_id: string, id: string, cart_items: Array<CartItem>, total_price: number }
 
-function CartItemView({ id, quantity, product: { name, price } }: CartItem) {
+function CartItemView({ cartsRoute, id, quantity, product_id, product: { name, price } }: CartItem & { cartsRoute: string }) {
+  const { fetch } = useAuthFetch()
+  const client = useQueryClient()
+
+  const mutationDeleteCartItem = useMutation({
+    mutationKey: ["cart-delete-item", product_id],
+    mutationFn: async () => {
+      const response = await fetch(`${cartsRoute}/cart-item/${product_id}`, {
+        method: "DELETE",
+      })
+      if (!response || !response.ok) {
+        throw new Error("Cart request error")
+      }
+      return response.json()
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: ["cart"] })
+  })
+
   return (
     <Card key={id}>
       <CardHeader className="cursor-pointer">
@@ -112,7 +129,9 @@ function CartItemView({ id, quantity, product: { name, price } }: CartItem) {
                     <DropdownMenuItem>Increase</DropdownMenuItem>
                     <DropdownMenuItem>Decrease</DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem>Remove</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => mutationDeleteCartItem.mutate()}>
+                      Remove
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </TableCell>
@@ -152,7 +171,7 @@ export default function CartIndex() {
         `${mobile ? 'flex-col-reverse' : 'flex-row'}`
       )}>
         <div className={"flex-[2] flex flex-col gap-2 px-2 overflow-scroll"}>
-          {model.data.cart.cart_items.map(CartItemView)}
+          {model.data.cart.cart_items.map(i => <CartItemView key={i.id} cartsRoute={cartsRoute}  {...i} />)}
         </div>
         <div className="flex-[1]">
           <Card

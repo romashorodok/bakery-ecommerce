@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +9,7 @@ from bakery_ecommerce.context_bus import ContextBus
 from bakery_ecommerce.internal.cart.cart_events import (
     GetUserCartEvent,
     UserCartAddCartItemEvent,
+    UserCartDeleteCartItemEvent,
     UserCartRetrievedEvent,
 )
 from bakery_ecommerce.internal.cart.store.cart_item_model import CartItem
@@ -75,3 +77,27 @@ class UserCartAddCartItem:
             CrudOperation(CartItem, lambda q: q.create_one(cart_item)),
         )
         return UserCartAddCartItemResult(result)
+
+
+@dataclass
+class UserCartDeleteCartItemResult:
+    result: int
+
+
+class UserCartDeleteCartItem:
+    def __init__(self, queries: QueryProcessor) -> None:
+        self.__queries = queries
+
+    async def execute(self, params: UserCartDeleteCartItemEvent):
+        async def query(session: AsyncSession):
+            stmt = delete(CartItem).where(
+                and_(
+                    CartItem.product_id == params.product_id,
+                    CartItem.cart_id == params.cart.id,
+                )
+            )
+            result = await session.execute(stmt)
+            return result.rowcount
+
+        result = await self.__queries.process(params.session, CustomBuilder(query))
+        return UserCartDeleteCartItemResult(result)

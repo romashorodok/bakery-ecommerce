@@ -26,11 +26,13 @@ class OrderItem(PersistanceBase, ScalarID):
 
     quantity: Mapped[int] = mapped_column()
     price: Mapped[int] = mapped_column()
+    price_multiplier: Mapped[int] = mapped_column()
+    price_multiplied: Mapped[int] = mapped_column()
 
     product_id: Mapped[UUID] = mapped_column(ForeignKey("products.id"))
     order_id: Mapped[UUID] = mapped_column(ForeignKey("orders.id"))
 
-    # product: Mapped[Product] = relationship(lazy=False)
+    product: Mapped[Product] = relationship(lazy=False)
 
 
 class PaymentDetail(PersistanceBase, ScalarID):
@@ -50,5 +52,4 @@ class Order(PersistanceBase, ScalarID):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id"))
 
     payment_detail: Mapped[PaymentDetail] = relationship(lazy=False)
-
-    # order_items: Mapped[list[OrderItem]] = relationship(lazy=False)
+    order_items: Mapped[list[OrderItem]] = relationship(lazy=False)

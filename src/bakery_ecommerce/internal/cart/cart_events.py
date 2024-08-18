@@ -42,3 +42,14 @@ class UserCartAddCartItemEvent(ContextPersistenceEvent):
     @property
     def payload(self) -> Self:
         return self
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
+class UserCartDeleteCartItemEvent(ContextPersistenceEvent):
+    cart: Cart
+    product_id: UUID
+
+    @property
+    def payload(self) -> Self:
+        return self

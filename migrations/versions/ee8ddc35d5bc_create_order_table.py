@@ -95,6 +95,16 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column(
+            "price_multiplier",
+            sa.Integer,
+            nullable=False,
+        ),
+        sa.Column(
+            "price_multiplied",
+            sa.Integer,
+            nullable=False,
+        ),
+        sa.Column(
             "quantity",
             sa.Integer,
             nullable=False,

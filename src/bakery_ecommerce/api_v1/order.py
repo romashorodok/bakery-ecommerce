@@ -11,19 +11,29 @@ from bakery_ecommerce.context_bus import (
     ContextExecutor,
     impl_event,
 )
+from bakery_ecommerce.internal.cart.cart_events import (
+    GetUserCartEvent,
+    UserCartRetrievedEvent,
+)
+from bakery_ecommerce.internal.cart.cart_use_cases import GetUserCart
+from bakery_ecommerce.internal.cart.store.cart_model import Cart
 from bakery_ecommerce.internal.identity.token import Token
+from bakery_ecommerce.internal.order.billing import StripeBilling
 from bakery_ecommerce.internal.order.order_events import (
+    CartItemsToOrderItemsEvent,
     ChangePaymentMethodEvent,
     GetUserDraftOrderEvent,
-    GetUserDraftOrderRetrievedEvent,
+    UserDraftOrderRetrievedEvent,
 )
 from bakery_ecommerce.internal.order.order_use_cases import (
+    CartItemsToOrderItems,
     ChangePaymentMethod,
     ChangePaymentMethodResult,
     GetUserDraftOrder,
     GetUserDraftOrderResult,
 )
 from bakery_ecommerce.internal.order.store.order_model import (
+    Order,
     Payment_Provider_Enum,
 )
 from bakery_ecommerce.internal.store.query import QueryProcessor
@@ -93,7 +103,7 @@ def user_change_draft_payment_method_request__context_bus(
         root_event = e
         await context.publish(GetUserDraftOrderEvent(e.user_id))
 
-    async def get_user_draft_order_retrieved_event(e: GetUserDraftOrderRetrievedEvent):
+    async def get_user_draft_order_retrieved_event(e: UserDraftOrderRetrievedEvent):
         nonlocal root_event
         await context.publish(
             ChangePaymentMethodEvent(order=e.order, provider=root_event.provider)
@@ -107,7 +117,7 @@ def user_change_draft_payment_method_request__context_bus(
         )
         | ContextExecutor(GetUserDraftOrderEvent, _get_user_draft_order.execute)
         | ContextExecutor(
-            GetUserDraftOrderRetrievedEvent, get_user_draft_order_retrieved_event
+            UserDraftOrderRetrievedEvent, get_user_draft_order_retrieved_event
         )
         | ContextExecutor(ChangePaymentMethodEvent, _change_payment_method.execute)
     )
@@ -143,6 +153,79 @@ async def user_change_draft_payment_method(
         lambda resp, result: set_key(resp, "payment_detail", result.payment_detail),
     )
     return cmp.reduce(result.flatten())
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
+class ConvertCartToDraftOrder:
+    user_id: UUID
+    order: Order | None = None
+    cart: Cart | None = None
+
+    @property
+    def payload(self) -> Self:
+        return self
+
+
+def user_convert_cart_to_draft_order_request__context_bus(
+    context: ContextBus = Depends(dependencies.request_context_bus),
+    queries: QueryProcessor = Depends(dependencies.request_query_processor),
+) -> ContextBus:
+    _get_user_cart = GetUserCart(context, queries)
+    _get_user_draft_order = GetUserDraftOrder(context, queries)
+    # TODO: provide different payment provider
+    _cart_items_to_order_items = CartItemsToOrderItems(queries, StripeBilling())
+
+    root_event: ConvertCartToDraftOrder
+
+    async def dispatch(e: ConvertCartToDraftOrder):
+        nonlocal root_event
+        root_event = e
+        await context.publish(GetUserCartEvent(e.user_id))
+        await context.publish(GetUserDraftOrderEvent(e.user_id))
+
+    async def waiter(e: UserCartRetrievedEvent | UserDraftOrderRetrievedEvent):
+        nonlocal root_event
+        if isinstance(e, UserCartRetrievedEvent):
+            root_event.cart = e.cart
+        if isinstance(e, UserDraftOrderRetrievedEvent):
+            root_event.order = e.order
+
+        if root_event.order and root_event.cart:
+            await context.publish(
+                CartItemsToOrderItemsEvent(
+                    cart=root_event.cart,
+                    order=root_event.order,
+                )
+            )
+
+    return (
+        context
+        | ContextExecutor(ConvertCartToDraftOrder, dispatch)
+        | ContextExecutor(GetUserCartEvent, _get_user_cart.execute)
+        | ContextExecutor(GetUserDraftOrderEvent, _get_user_draft_order.execute)
+        | ContextExecutor(UserCartRetrievedEvent, waiter)
+        | ContextExecutor(UserDraftOrderRetrievedEvent, waiter)
+        | ContextExecutor(
+            CartItemsToOrderItemsEvent, _cart_items_to_order_items.execute
+        )
+    )
+
+
+@api.put("/draft/convert-cart-to-order", dependencies=[Depends(verify_access_token)])
+async def user_convert_cart_to_draft_order(
+    token: Annotated[Token, Depends(verify_access_token)],
+    context: Annotated[
+        ContextBus, Depends(user_convert_cart_to_draft_order_request__context_bus)
+    ],
+):
+    user_id = token.user_id()
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not found user_id")
+
+    await context.publish(ConvertCartToDraftOrder(user_id=user_id))
+    await context.gather()
+    return {"ok": True}
 
 
 def register_handler(router: APIRouter):

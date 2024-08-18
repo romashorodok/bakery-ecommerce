@@ -9,13 +9,13 @@ from bakery_ecommerce.context_bus import (
     ContextBus,
     ContextEventProtocol,
     ContextExecutor,
-    ContextPersistenceEvent,
     impl_event,
 )
 from bakery_ecommerce import dependencies
 from bakery_ecommerce.internal.cart.cart_events import (
     GetUserCartEvent,
     UserCartAddCartItemEvent,
+    UserCartDeleteCartItemEvent,
     UserCartRetrievedEvent,
 )
 from bakery_ecommerce.internal.cart.cart_use_cases import (
@@ -24,6 +24,7 @@ from bakery_ecommerce.internal.cart.cart_use_cases import (
     ProductAlreadyInCart,
     UserCartAddCartItem,
     UserCartAddCartItemResult,
+    UserCartDeleteCartItem,
 )
 from bakery_ecommerce.internal.cart.store.cart_model import Cart
 from bakery_ecommerce.internal.identity.token import Token
@@ -68,8 +69,7 @@ async def get_cart(
 
 @dataclass
 @impl_event(ContextEventProtocol)
-# TODO: remove ContextPersistenceEvent
-class AddCartItemComposableEvent(ContextPersistenceEvent):
+class AddCartItemComposableEvent:
     product_id: str
     quantity: int
     user_id: UUID
@@ -163,6 +163,74 @@ async def add_cart_item(
         return cmp.reduce(result.flatten())
     except ProductAlreadyInCart:
         raise HTTPException(status_code=412, detail="Product already in card")
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
+class DeleteCartItemEvent:
+    product_id: UUID
+    user_id: UUID
+
+    @property
+    def payload(self) -> Self:
+        return self
+
+
+def delete_cart_item_request__context_bus(
+    context: ContextBus = Depends(dependencies.request_context_bus),
+    queries: QueryProcessor = Depends(dependencies.request_query_processor),
+) -> ContextBus:
+    _get_user_cart = GetUserCart(context, queries)
+    _user_cart_delete_cart_item = UserCartDeleteCartItem(queries)
+
+    root_event: DeleteCartItemEvent
+
+    async def dispatch(e: DeleteCartItemEvent):
+        nonlocal root_event
+        root_event = e
+        await context.publish(GetUserCartEvent(user_id=e.user_id))
+
+    async def waiter(e: UserCartRetrievedEvent):
+        nonlocal root_event
+        await context.publish(
+            UserCartDeleteCartItemEvent(
+                cart=e.cart,
+                product_id=root_event.product_id,
+            )
+        )
+
+    return (
+        context
+        | ContextExecutor(DeleteCartItemEvent, dispatch)
+        | ContextExecutor(GetUserCartEvent, _get_user_cart.execute)
+        | ContextExecutor(UserCartRetrievedEvent, waiter)
+        | ContextExecutor(
+            UserCartDeleteCartItemEvent, _user_cart_delete_cart_item.execute
+        )
+    )
+
+
+@api.delete(path="/cart-item/{product_id}", dependencies=[Depends(verify_access_token)])
+async def delete_cart_item(
+    product_id: str,
+    context: Annotated[ContextBus, Depends(delete_cart_item_request__context_bus)],
+    token: Annotated[Token, Depends(verify_access_token)],
+):
+    user_id = token.user_id()
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Missing user_id for add_cart_item")
+
+    await context.publish(
+        DeleteCartItemEvent(
+            product_id=UUID(product_id),
+            user_id=user_id,
+        )
+    )
+
+    result = await context.gather()
+    print(result.flatten())
+
+    return {"test": "test"}
 
 
 def register_handler(router: APIRouter):

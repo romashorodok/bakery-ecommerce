@@ -95,8 +95,13 @@ class AsyncCrud(Generic[AsyncCrud_T]):
         result = await self.__session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def remote_by_field(self, field: str = "id", value: Any = Any) -> bool:
+    async def remove_by_field(self, field: str = "id", value: Any = Any) -> bool:
         stmt = delete(self.__model).where(getattr(self.__model, field) == value)
+        result = await self.__session.execute(stmt)
+        return result.rowcount == 1
+
+    async def remove_many_by_field(self, field: str = "id", values: list[Any] = list()):
+        stmt = delete(self.__model).where(getattr(self.__model, field).in_(values))
         result = await self.__session.execute(stmt)
         return result.rowcount == 1
 
