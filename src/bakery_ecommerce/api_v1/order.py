@@ -174,7 +174,9 @@ def user_convert_cart_to_draft_order_request__context_bus(
     _get_user_cart = GetUserCart(context, queries)
     _get_user_draft_order = GetUserDraftOrder(context, queries)
     # TODO: provide different payment provider
-    _cart_items_to_order_items = CartItemsToOrderItems(queries, StripeBilling())
+    _cart_items_to_order_items = CartItemsToOrderItems(
+        context, queries, StripeBilling()
+    )
 
     root_event: ConvertCartToDraftOrder
 
@@ -226,6 +228,13 @@ async def user_convert_cart_to_draft_order(
     await context.publish(ConvertCartToDraftOrder(user_id=user_id))
     await context.gather()
     return {"ok": True}
+
+
+@api.delete("/draft", dependencies=[Depends(verify_access_token)])
+async def user_delete_draft_order_and_cart(
+    token: Annotated[Token, Depends(verify_access_token)],
+):
+    pass
 
 
 def register_handler(router: APIRouter):

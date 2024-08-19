@@ -95,16 +95,12 @@ def request_nats_session(
     return cache_request_attr(request, nc)
 
 
-def start_loop(
-    loop: asyncio.AbstractEventLoop,
-    worker_f: Callable[[Any], Coroutine],
-    delay: float = 2.0,
-    *args,
-):
-    retries = 0
+async def spawn_worker(worker_f: Callable[..., Coroutine], *args):
+    loop = asyncio.get_running_loop()
+    delay = 2.0
     while True:
         try:
-            loop.run_until_complete(worker_f(*args))
+            await loop.create_task(worker_f(*args))
         except Exception as e:
             if "Event loop stopped before Future completed" in str(e):
                 print("Stop worker loop")
@@ -112,36 +108,44 @@ def start_loop(
 
             print(f"catch error in loop routine. Delay {delay}. {e}")
             time.sleep(delay)
-        finally:
-            retries += 1
 
 
-def spawn_worker_thread(
-    worker_f: Callable[..., Coroutine], *args
-) -> tuple[asyncio.AbstractEventLoop, threading.Thread]:
-    runner = asyncio.new_event_loop()
-    thread = threading.Thread(target=start_loop, args=(runner, worker_f, 2.0, *args))
-    return (runner, thread)
+any_payment_intent_subject = "payment_intent.>"
+any_charge_subject = "charge.>"
 
-
-stripe_any_subject = "stripe.>"
-
-payments_stream_config = StreamConfig(
-    name="PAYMENTS",
+payments_stripe_stream_config = StreamConfig(
+    name="PAYMENTS_STRIPE",
     retention=RetentionPolicy.WORK_QUEUE,
     discard=DiscardPolicy.OLD,
     subjects=[
-        stripe_any_subject,
+        any_payment_intent_subject,
+        any_charge_subject,
     ],
 )
 
 
-def payments_stripe_consumer_config(consumer_name: str) -> ConsumerConfig:
+def payments_stripe_payment_intent_created_consumer_config(
+    consumer_name: str,
+) -> ConsumerConfig:
     return ConsumerConfig(
         name=consumer_name,
         deliver_policy=DeliverPolicy.ALL,
         deliver_group="payments_stripe_group_0",
-        deliver_subject="stripe",
+        deliver_subject="payment_intent",
+        filter_subjects=["payment_intent.created.*"],
+        ack_policy=AckPolicy.EXPLICIT,
+    )
+
+
+def payments_stripe_charge_succeeded_consumer_config(
+    consumer_name: str,
+) -> ConsumerConfig:
+    return ConsumerConfig(
+        name=consumer_name,
+        deliver_policy=DeliverPolicy.ALL,
+        deliver_group="payments_stripe_group_0",
+        deliver_subject="charge",
+        filter_subjects=["charge.succeeded.*"],
         ack_policy=AckPolicy.EXPLICIT,
     )
 
@@ -152,10 +156,10 @@ async def get_or_create_stream(js: JetStreamContext, config: StreamConfig):
 
     try:
         stream = await js.stream_info(config.name)
-        stream = await js.update_stream(payments_stream_config)
+        stream = await js.update_stream(payments_stripe_stream_config)
     except NotFoundError as e:
         print(f"not found stream {e}", type(e))
-        stream = await js.add_stream(payments_stream_config)
+        stream = await js.add_stream(payments_stripe_stream_config)
 
     return stream
 
@@ -179,34 +183,45 @@ async def get_or_create_consumer(
 async def lifespan(_: fastapi.FastAPI):
     async with await nats.connect(nats_server) as nc:
         js = nc.jetstream()
-        await get_or_create_stream(js, payments_stream_config)
+        await get_or_create_stream(js, payments_stripe_stream_config)
         await get_or_create_consumer(
             js,
-            payments_stream_config,
-            payments_stripe_consumer_config("payments_stripe_consumer_0"),
+            payments_stripe_stream_config,
+            payments_stripe_payment_intent_created_consumer_config(
+                "stripe_payment_intent_created_0"
+            ),
+        )
+        await get_or_create_consumer(
+            js,
+            payments_stripe_stream_config,
+            payments_stripe_charge_succeeded_consumer_config(
+                "stripe_charge_succeeded_0"
+            ),
         )
 
     stripe_secret_key = os.environ.get("STRIPE_SECRET_KEY")
     print("Use stripe secret key:", stripe_secret_key)
     stripe.api_key = stripe_secret_key
 
-    stripe_runner, stripe_thread = spawn_worker_thread(
-        worker.stripe.worker, "payments_stripe_consumer_1", nats_server, session_manager
+    asyncio.ensure_future(
+        spawn_worker(
+            worker.stripe.payment_intent_created_worker,
+            "payments_stripe_payment_intent_created_consumer_1",
+            nats_server,
+            session_manager,
+        )
     )
-    stripe_thread.start()
 
-    stripe_runner_2, stripe_thread_2 = spawn_worker_thread(
-        worker.stripe.worker, "payments_stripe_consumer_2", nats_server, session_manager
+    asyncio.ensure_future(
+        spawn_worker(
+            worker.stripe.charge_succeeded_worker,
+            "payments_stripe_charge_succeeded_worker_consumer_1",
+            nats_server,
+            session_manager,
+        )
     )
-    stripe_thread_2.start()
 
     yield
-
-    stripe_runner_2.call_soon_threadsafe(stripe_runner_2.stop)
-    stripe_thread_2.join()
-
-    stripe_runner.call_soon_threadsafe(stripe_runner.stop)
-    stripe_thread.join()
 
     if not session_manager.is_closed():
         await session_manager.close()
@@ -222,6 +237,10 @@ query_handlers = QueryProcessorHandlers(
         NormalizeCatalogItemsPosition: NormalizeCatalogItemsPositionHandler,
     }
 )
+
+
+def query_processor_factory(nats: NATS) -> QueryProcessor:
+    return QueryProcessor(query_handlers, QueryCache(nats))
 
 
 def query_processor(nats: NATS = fastapi.Depends(request_nats_session)):

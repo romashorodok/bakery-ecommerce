@@ -39,6 +39,8 @@ class PaymentDetail(PersistanceBase, ScalarID):
     __tablename__ = "payment_details"
 
     payment_provider: Mapped[Payment_Provider_Enum | None] = mapped_column()
+    payment_intent: Mapped[str | None] = mapped_column()
+    client_secret: Mapped[str | None] = mapped_column()
 
 
 class Order(PersistanceBase, ScalarID):
@@ -53,3 +55,6 @@ class Order(PersistanceBase, ScalarID):
 
     payment_detail: Mapped[PaymentDetail] = relationship(lazy=False)
     order_items: Mapped[list[OrderItem]] = relationship(lazy=False)
+
+    def items_price_multiplied(self) -> int:
+        return sum(item.price_multiplied for item in self.order_items)

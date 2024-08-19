@@ -93,7 +93,7 @@ class AsyncCrud(Generic[AsyncCrud_T]):
             .returning(self.__model)
         )
         result = await self.__session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.unique().scalar_one_or_none()
 
     async def remove_by_field(self, field: str = "id", value: Any = Any) -> bool:
         stmt = delete(self.__model).where(getattr(self.__model, field) == value)

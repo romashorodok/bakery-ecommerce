@@ -1,7 +1,7 @@
 import { useLoaderData } from '@remix-run/react';
 import { LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { loadStripe } from '@stripe/stripe-js';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthFetch } from '~/hooks/useAuthFetch';
 
@@ -37,6 +37,12 @@ import {
   MoreHorizontal,
   PlusCircle,
 } from "lucide-react"
+import { Elements } from "@stripe/react-stripe-js";
+import {
+  PaymentElement,
+  useStripe,
+  useElements
+} from "@stripe/react-stripe-js";
 
 export const loader = async ({ context: { cloudflare: { env } } }: LoaderFunctionArgs) => {
   return json({
@@ -44,6 +50,94 @@ export const loader = async ({ context: { cloudflare: { env } } }: LoaderFunctio
     paymentRoute: env.PAYMENT_ROUTE,
     orderRoute: env.ORDER_ROUTE,
   })
+}
+
+function StripeCheckoutForm() {
+  const stripe = useStripe();
+  const elements = useElements();
+
+  const [message, setMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!stripe) {
+      return;
+    }
+
+    const clientSecret = new URLSearchParams(window.location.search).get(
+      "payment_intent_client_secret"
+    );
+
+    if (!clientSecret) {
+      return;
+    }
+
+    stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) => {
+      if (!paymentIntent) return
+
+      switch (paymentIntent.status) {
+        case "succeeded":
+          setMessage("Payment succeeded!");
+          break;
+        case "processing":
+          setMessage("Your payment is processing.");
+          break;
+        case "requires_payment_method":
+          setMessage("Your payment was not successful, please try again.");
+          break;
+        default:
+          setMessage("Something went wrong.");
+          break;
+      }
+    });
+  }, [stripe]);
+
+  const handleSubmit = async (e: any) => {
+    e.preventDefault();
+
+    if (!stripe || !elements) {
+      // Stripe.js hasn't yet loaded.
+      // Make sure to disable form submission until Stripe.js has loaded.
+      return;
+    }
+
+    setIsLoading(true);
+
+    const { error } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        // Make sure to change this to your payment completion page
+        return_url: "http://localhost:3000",
+      },
+    });
+
+    // This point will only be reached if there is an immediate error when
+    // confirming the payment. Otherwise, your customer will be redirected to
+    // your `return_url`. For some payment methods like iDEAL, your customer will
+    // be redirected to an intermediate site first to authorize the payment, then
+    // redirected to the `return_url`.
+    if (error.type === "card_error" || error.type === "validation_error") {
+      setMessage(error.message || null);
+    } else {
+      setMessage("An unexpected error occurred.");
+    }
+
+    setIsLoading(false);
+  };
+
+  return (
+    <form id="payment-form" onSubmit={handleSubmit}>
+
+      <PaymentElement id="payment-element" options={{ layout: 'tabs' }} />
+      <button disabled={isLoading || !stripe || !elements} id="submit">
+        <span id="button-text">
+          {isLoading ? <div className="spinner" id="spinner"></div> : "Pay now"}
+        </span>
+      </button>
+      {/* Show any error or success messages */}
+      {message && <div id="payment-message">{message}</div>}
+    </form>
+  );
 }
 
 function useStripeSession({ paymentRoute }: { paymentRoute: string }) {
@@ -55,18 +149,32 @@ function useStripeSession({ paymentRoute }: { paymentRoute: string }) {
       const response = await fetch(`${paymentRoute}/stripe/payment-intent`, {
         method: "POST",
       })
+      if (!response || !response.ok)
+        throw new Error("Something goes wrong at stripe payment intent...")
+      return response.json<{ client_secret: string }>()
     }
   })
 
-  return {}
+  return { model }
 }
 
-function StripeCheckout({ paymentRoute, stripePubkey }: { stripePubkey: string, paymentRoute: string }) {
-  // const { } = useStripeSession({ paymentRoute })
+function StripeSession({ paymentRoute, stripePubkey }: { stripePubkey: string, paymentRoute: string }) {
+  const { model } = useStripeSession({ paymentRoute })
 
-  // const stripe = useMemo(() => loadStripe(stripePubkey), [stripePubkey])
+  const stripe = useMemo(() => loadStripe(stripePubkey), [stripePubkey])
 
-  return <div>Stripe checkout</div>
+  return (
+    <div>
+      {model.data?.client_secret && (
+        <Elements options={{
+          clientSecret: model.data.client_secret,
+          appearance: { theme: 'stripe' },
+        }} stripe={stripe} >
+          <StripeCheckoutForm />
+        </Elements>
+      )}
+    </div>
+  )
 }
 
 
@@ -135,10 +243,19 @@ function OrderItemView({ id, quantity, price, product: { name } }: OrderItem) {
 }
 
 const ORDER_DRAFT_SESSION = "order-draft-session"
+const ORDER_DRAFT_CART_CONVERSATION = "order-draft-cart-conversation-to-order"
+const ORDER_DRAFT_PAYMENT_METHOD = "order-draft-payment-method"
+
 
 function useOrderSession({ orderRoute }: { orderRoute: string }) {
   const { fetch } = useAuthFetch()
   const client = useQueryClient()
+
+  const resetSesssion = useCallback(() => {
+    client.invalidateQueries({ queryKey: [ORDER_DRAFT_SESSION] })
+    client.invalidateQueries({ queryKey: [ORDER_DRAFT_CART_CONVERSATION] })
+    client.invalidateQueries({ queryKey: [ORDER_DRAFT_PAYMENT_METHOD] })
+  }, [client])
 
   const model = useQuery({
     queryKey: [ORDER_DRAFT_SESSION],
@@ -154,7 +271,7 @@ function useOrderSession({ orderRoute }: { orderRoute: string }) {
   })
 
   const cartConversationToOrder = useMutation({
-    mutationKey: ["order-draft-cart-conversation-to-order"],
+    mutationKey: [ORDER_DRAFT_CART_CONVERSATION],
     mutationFn: async () => {
       const response = await fetch(`${orderRoute}/draft/convert-cart-to-order`, {
         method: "PUT",
@@ -167,11 +284,11 @@ function useOrderSession({ orderRoute }: { orderRoute: string }) {
       }
       return response.json()
     },
-    onSuccess: () => client.invalidateQueries({ queryKey: [ORDER_DRAFT_SESSION] })
+    onSuccess: () => client.invalidateQueries({ queryKey: [ORDER_DRAFT_SESSION] }),
   })
 
   const mutatePaymentMethod = useMutation({
-    mutationKey: ["order-draft-payment-method"],
+    mutationKey: [ORDER_DRAFT_PAYMENT_METHOD],
     mutationFn: async (provider: PAYMENT_PROVIDER_KEY) => {
       const response = await fetch(`${orderRoute}/draft/payment-method`, {
         method: "PUT",
@@ -185,20 +302,23 @@ function useOrderSession({ orderRoute }: { orderRoute: string }) {
       }
       return response.json<{ payment_detail: string }>()
     },
-    onSuccess: () => cartConversationToOrder.mutate()
+    onError: () => resetSesssion()
   })
 
-
-  return { model, mutatePaymentMethod }
+  return { model, mutatePaymentMethod, cartConversationToOrder }
 }
-// convert-cart-to-order
 
 export default function CheckoutIndex() {
   const { stripePubkey, paymentRoute, orderRoute } = useLoaderData<typeof loader>()
 
-  const { model, mutatePaymentMethod } = useOrderSession({ orderRoute })
+  const { model, mutatePaymentMethod, cartConversationToOrder } = useOrderSession({ orderRoute })
 
   const [provider, setProvider] = useState<PAYMENT_PROVIDER_KEY | undefined>()
+
+  useEffect(() => {
+    if (!mutatePaymentMethod.data?.payment_detail) return
+    cartConversationToOrder.mutate()
+  }, [mutatePaymentMethod.data])
 
   useEffect(() => {
     if (!provider) return
@@ -228,19 +348,20 @@ export default function CheckoutIndex() {
         {provider &&
           <section>
             {model.data.order.order_items && model.data.order.order_items.length > 0
-              ? <div>{model.data.order.order_items.map(OrderItemView)}</div>
+              ? <div className="flex flex-col gap-2" >{model.data.order.order_items.map(OrderItemView)}</div>
               : <h1>Not found items. Add items to cart first!</h1>
             }
+            {(() => {
+              switch (provider) {
+                case PAYMENT_PROVIDER.STRIPE:
+                  return <StripeSession stripePubkey={stripePubkey} paymentRoute={paymentRoute} />
+                default:
+                  return <div>Not supported provider: {provider}</div>
+              }
+            })()}
           </section>
         }
       </div>
     )
   }
 }
-
-// {PAYMENT_PROVIDER.STRIPE == provider &&
-//   <StripeCheckout stripePubkey={stripePubkey} paymentRoute={paymentRoute} />
-// }
-// {PAYMENT_PROVIDER.PAYPAL == provider &&
-//   <div>paypal not supported</div>
-// }

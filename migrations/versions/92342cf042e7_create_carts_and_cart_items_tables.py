@@ -71,7 +71,7 @@ def upgrade() -> None:
             sa.UUID,
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(["cart_id"], ["carts.id"]),
+        sa.ForeignKeyConstraint(["cart_id"], ["carts.id"], ondelete="CASCADE"),
     )
 
 

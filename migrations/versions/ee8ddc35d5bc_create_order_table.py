@@ -49,6 +49,16 @@ def upgrade() -> None:
             payment_provider_enum,
             nullable=True,
         ),
+        sa.Column(
+            "payment_intent",
+            sa.Text,
+            nullable=True,
+        ),
+        sa.Column(
+            "client_secret",
+            sa.Text,
+            nullable=True,
+        ),
     )
 
     op.create_table(

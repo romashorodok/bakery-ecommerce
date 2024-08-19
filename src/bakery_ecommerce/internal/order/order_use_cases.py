@@ -9,6 +9,7 @@ from bakery_ecommerce.context_bus import ContextBus
 from bakery_ecommerce.internal.cart.store.cart_item_model import CartItem
 from bakery_ecommerce.internal.order.billing import Billing
 from bakery_ecommerce.internal.order.order_events import (
+    CartItemsToOrderItemsConvertedEvent,
     CartItemsToOrderItemsEvent,
     ChangePaymentMethodEvent,
     GetUserDraftOrderEvent,
@@ -68,13 +69,6 @@ class GetUserDraftOrder:
         return GetUserDraftOrderResult(result)
 
 
-class NotModifiedPaymentProviderError(HTTPException):
-    def __init__(self, provider: str) -> None:
-        super().__init__(
-            200, f"Not modified payment provider. Current provider {provider}", None
-        )
-
-
 @dataclass
 class ChangePaymentMethodResult:
     payment_detail: PaymentDetail | None
@@ -85,9 +79,6 @@ class ChangePaymentMethod:
         self.__queries = queries
 
     async def execute(self, params: ChangePaymentMethodEvent):
-        if params.order.payment_detail.payment_provider == params.provider:
-            raise NotModifiedPaymentProviderError(params.provider)
-
         operation = CrudOperation(
             PaymentDetail,
             lambda q: q.update_partial(
@@ -106,8 +97,15 @@ class EmptyCartItemsError(HTTPException):
 
 
 @dataclass
+class CartItemsToOrderItemsResult:
+    order: Order | None
+
+
 class CartItemsToOrderItems:
-    def __init__(self, queries: QueryProcessor, billing: Billing) -> None:
+    def __init__(
+        self, context: ContextBus, queries: QueryProcessor, billing: Billing
+    ) -> None:
+        self.__context = context
         self.__queries = queries
         self.__billing = billing
 
@@ -119,13 +117,19 @@ class CartItemsToOrderItems:
         await self.__sanitize_order_items(
             params.session, params.order.order_items, cart_items
         )
+        await params.session.flush()
+
         await self.__create_or_update_order_items(
             params.session, params.order, cart_items
         )
-        await params.session.flush()
 
-        # TODO: Use like facade/bridge in which provide payment vendor related logic like price calc because at payment intent price will be calc differently at my side and stripe
-        return
+        await params.session.flush()
+        result = await self.__queries.process(
+            params.session,
+            CrudOperation(Order, lambda q: q.get_one_by_field("id", params.order.id)),
+        )
+        await self.__context.publish(CartItemsToOrderItemsConvertedEvent(result))
+        return CartItemsToOrderItemsResult(result)
 
     async def __create_or_update_order_items(
         self,
@@ -174,16 +178,18 @@ class CartItemsToOrderItems:
         order_items: list[OrderItem],
         cart_items: list[CartItem],
     ):
-        cart_product_ids = map(lambda i: i.product_id, cart_items)
-        items_ids_to_delete = list[UUID]()
+        cart_product_ids = set(map(lambda i: i.product_id, cart_items))
+        items_ids_to_delete: list[UUID] = []
 
         for order_item in order_items:
             if order_item.product_id not in cart_product_ids:
                 items_ids_to_delete.append(order_item.id)
 
-        await self.__queries.process(
-            session,
-            CrudOperation(
-                OrderItem, lambda q: q.remove_many_by_field("id", items_ids_to_delete)
-            ),
-        )
+        if items_ids_to_delete:
+            await self.__queries.process(
+                session,
+                CrudOperation(
+                    OrderItem, lambda q: q.remove_many_by_field("id", items_ids_to_delete)
+                ),
+            )
+

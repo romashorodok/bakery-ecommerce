@@ -53,3 +53,13 @@ class CartItemsToOrderItemsEvent(ContextPersistenceEvent):
     @property
     def payload(self) -> Self:
         return self
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
+class CartItemsToOrderItemsConvertedEvent:
+    order: Order | None
+
+    @property
+    def payload(self) -> Self:
+        return self
