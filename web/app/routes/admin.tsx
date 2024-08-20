@@ -43,7 +43,8 @@ const navItems = [
   { label: "Main", to: "/admin", Icon: User },
   { label: "Products", to: "/admin/products", Icon: Package },
   { label: "Frontpage", to: "/admin/frontpage", Icon: LayoutTemplateIcon },
-  { label: "Catalogs", to: "/admin/catalogs", Icon: Layers3 }
+  { label: "Catalogs", to: "/admin/catalogs", Icon: Layers3 },
+  { label: "Orders", to: "/admin/orders", Icon: Layers3 }
 ];
 
 

@@ -1,18 +1,23 @@
 from dataclasses import dataclass
+from typing import Any, Sequence
 from uuid import UUID
 from fastapi import HTTPException
+from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bakery_ecommerce.context_bus import ContextBus
 from bakery_ecommerce.internal.cart.store.cart_item_model import CartItem
+from bakery_ecommerce.internal.identity.store.user_model import User
 from bakery_ecommerce.internal.order.billing import Billing
 from bakery_ecommerce.internal.order.order_events import (
     CartItemsToOrderItemsConvertedEvent,
     CartItemsToOrderItemsEvent,
     ChangePaymentMethodEvent,
+    GetOrdersEvent,
     GetUserDraftOrderEvent,
+    GetUserOrdersEvent,
     UserDraftOrderRetrievedEvent,
 )
 from bakery_ecommerce.internal.order.store.order_model import (
@@ -25,8 +30,93 @@ from bakery_ecommerce.internal.store.crud_queries import (
     CrudOperation,
     CustomBuilder,
 )
+from bakery_ecommerce.internal.store.join_queries import (
+    JoinOn,
+    JoinOperation,
+    JoinRoot,
+)
 from bakery_ecommerce.internal.store.query import QueryProcessor
 from bakery_ecommerce.utils import get_model_dict
+
+
+@dataclass
+class Customer:
+    first_name: str
+    last_name: str
+    email: str
+
+
+@dataclass
+class OrderWithCustomer:
+    order: dict[str, Any]
+    customer: Customer | None
+
+
+@dataclass
+class GetOrdersResult:
+    orders_with_customers: list[OrderWithCustomer]
+
+
+class GetOrders:
+    def __init__(self, queries: QueryProcessor) -> None:
+        self.__queries = queries
+
+    async def execute(self, params: GetOrdersEvent) -> GetOrdersResult:
+        operation = JoinOperation(
+            where_value=None,
+            join_root=JoinRoot(model=Order, field="id"),
+            join_on={User: JoinOn(model=User, field="id", root_field="user_id")},
+        )
+        result = await self.__queries.process(params.session, operation)
+
+        orders = result.get_strict(Order)
+        users = {user.id: user for user in result.get_strict(User)}
+
+        orders_with_customers = list[OrderWithCustomer]()
+
+        for order in orders:
+            user = users.get(order.user_id)
+            customer: Customer | None = None
+            if user:
+                customer = Customer(user.first_name, user.last_name, user.email)
+
+            orders_with_customers.append(
+                OrderWithCustomer(
+                    order.to_dict(),
+                    customer,
+                )
+            )
+
+        return GetOrdersResult(orders_with_customers)
+
+
+@dataclass
+class GetUserOrdersResult:
+    orders: Sequence[Order]
+
+
+class GetUserOrders:
+    def __init__(self, queries: QueryProcessor) -> None:
+        self.__queries = queries
+
+    async def execute(self, params: GetUserOrdersEvent) -> GetUserOrdersResult:
+        async def query(session: AsyncSession) -> Sequence[Order]:
+            stmt = (
+                select(Order)
+                .where(
+                    and_(
+                        Order.user_id == params.user_id,
+                        Order.order_status != Order_Status_Enum.DRAFT,
+                    )
+                )
+                .limit(params.page_size)
+                .offset(params.page)
+            )
+            result = await session.execute(stmt)
+            return result.unique().scalars().all()
+
+        result = await self.__queries.process(params.session, CustomBuilder(query))
+        return GetUserOrdersResult(result)
 
 
 @dataclass
@@ -79,6 +169,8 @@ class ChangePaymentMethod:
         self.__queries = queries
 
     async def execute(self, params: ChangePaymentMethodEvent):
+        print("Change Provider", params.provider)
+
         operation = CrudOperation(
             PaymentDetail,
             lambda q: q.update_partial(
@@ -189,7 +281,7 @@ class CartItemsToOrderItems:
             await self.__queries.process(
                 session,
                 CrudOperation(
-                    OrderItem, lambda q: q.remove_many_by_field("id", items_ids_to_delete)
+                    OrderItem,
+                    lambda q: q.remove_many_by_field("id", items_ids_to_delete),
                 ),
             )
-

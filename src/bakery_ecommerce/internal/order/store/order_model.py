@@ -1,4 +1,5 @@
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -58,3 +59,15 @@ class Order(PersistanceBase, ScalarID):
 
     def items_price_multiplied(self) -> int:
         return sum(item.price_multiplied for item in self.order_items)
+
+    def total_price(self) -> int:
+        return sum(item.price for item in self.order_items)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "payment_detaill": self.payment_detail,
+            "order_items": self.order_items,
+            "order_status": self.order_status,
+            "amount": self.total_price(),
+            "id": self.id,
+        }

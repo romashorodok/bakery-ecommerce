@@ -15,6 +15,29 @@ from bakery_ecommerce.internal.order.store.order_model import (
 
 @dataclass
 @impl_event(ContextEventProtocol)
+class GetOrdersEvent(ContextPersistenceEvent):
+    page: int
+    page_size: int
+
+    @property
+    def payload(self) -> Self:
+        return self
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
+class GetUserOrdersEvent(ContextPersistenceEvent):
+    page: int
+    page_size: int
+    user_id: UUID
+
+    @property
+    def payload(self) -> Self:
+        return self
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
 class GetUserDraftOrderEvent(ContextPersistenceEvent):
     user_id: UUID
 

@@ -22,15 +22,21 @@ from bakery_ecommerce.internal.order.billing import StripeBilling
 from bakery_ecommerce.internal.order.order_events import (
     CartItemsToOrderItemsEvent,
     ChangePaymentMethodEvent,
+    GetOrdersEvent,
     GetUserDraftOrderEvent,
+    GetUserOrdersEvent,
     UserDraftOrderRetrievedEvent,
 )
 from bakery_ecommerce.internal.order.order_use_cases import (
     CartItemsToOrderItems,
     ChangePaymentMethod,
     ChangePaymentMethodResult,
+    GetOrders,
+    GetOrdersResult,
     GetUserDraftOrder,
     GetUserDraftOrderResult,
+    GetUserOrders,
+    GetUserOrdersResult,
 )
 from bakery_ecommerce.internal.order.store.order_model import (
     Order,
@@ -230,11 +236,74 @@ async def user_convert_cart_to_draft_order(
     return {"ok": True}
 
 
-@api.delete("/draft", dependencies=[Depends(verify_access_token)])
-async def user_delete_draft_order_and_cart(
+def orders_request__context_bus(
+    context: ContextBus = Depends(dependencies.request_context_bus),
+    queries: QueryProcessor = Depends(dependencies.request_query_processor),
+) -> ContextBus:
+    _get_orders = GetOrders(queries)
+    return context | ContextExecutor(GetOrdersEvent, _get_orders.execute)
+
+
+@api.get("/", dependencies=[Depends(verify_access_token)])
+async def orders(
     token: Annotated[Token, Depends(verify_access_token)],
+    context: Annotated[ContextBus, Depends(orders_request__context_bus)],
+    page: int = 0,
+    page_size: int = 20,
 ):
-    pass
+    user_id = token.user_id()
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not found user_id")
+
+    await context.publish(
+        GetOrdersEvent(
+            page=page,
+            page_size=page_size,
+        )
+    )
+
+    result = await context.gather()
+    cmp = Composable(dict[str, Any]())
+    cmp.reducer(
+        GetOrdersResult,
+        lambda resp, result: set_key(resp, "orders", result.orders_with_customers),
+    )
+    return cmp.reduce(result.flatten())
+
+
+def user_orders_request__context_bus(
+    context: ContextBus = Depends(dependencies.request_context_bus),
+    queries: QueryProcessor = Depends(dependencies.request_query_processor),
+) -> ContextBus:
+    _get_user_orders = GetUserOrders(queries)
+    return context | ContextExecutor(GetUserOrdersEvent, _get_user_orders.execute)
+
+
+@api.get("/user", dependencies=[Depends(verify_access_token)])
+async def user_orders(
+    token: Annotated[Token, Depends(verify_access_token)],
+    context: Annotated[ContextBus, Depends(user_orders_request__context_bus)],
+    page: int = 0,
+    page_size: int = 20,
+):
+    user_id = token.user_id()
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Not found user_id")
+
+    await context.publish(
+        GetUserOrdersEvent(
+            page=page,
+            page_size=page_size,
+            user_id=user_id,
+        )
+    )
+
+    result = await context.gather()
+    cmp = Composable(dict[str, Any]())
+    cmp.reducer(
+        GetUserOrdersResult, lambda resp, result: set_key(resp, "orders", result.orders)
+    )
+    return cmp.reduce(result.flatten())
 
 
 def register_handler(router: APIRouter):

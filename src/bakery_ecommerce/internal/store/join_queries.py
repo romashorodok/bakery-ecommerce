@@ -38,6 +38,8 @@ class JoinOn(Generic[_JOIN_T]):
 
 _JOIN_RESULT_T = TypeVar("_JOIN_RESULT_T")
 
+_JOIN_CHECK_T = TypeVar("_JOIN_CHECK_T")
+
 
 class JoinResult(Generic[_JOIN_RESULT_T]):
     def __init__(self, container: dict[str, list[_JOIN_RESULT_T]]) -> None:
@@ -47,6 +49,13 @@ class JoinResult(Generic[_JOIN_RESULT_T]):
     def get(self, t: type[_JOIN_RESULT_T]) -> list[_JOIN_RESULT_T] | None:
         return self.__container.get(str(t))
 
+    def get_strict(self, t: type[_JOIN_CHECK_T]) -> list[_JOIN_CHECK_T]:
+        data = self.get(t)  # pyright: ignore
+        if not data or len(data) == 0:
+            raise ValueError(f"JoinResult not found {str(t)}")
+
+        return data  # pyright: ignore
+
     def __repr__(self) -> str:
         return f"{self.__container}"
 
@@ -55,7 +64,7 @@ class JoinResult(Generic[_JOIN_RESULT_T]):
 class JoinOperation(Query[JoinResult[_JOIN_T]]):
     join_root: JoinRoot[_JOIN_T]
     join_on: dict[type[_JOIN_T], JoinOn[_JOIN_T]]
-    where_value: Any
+    where_value: Any | None
 
 
 class JoinOperationHandler(QueryHandler[JoinOperation, JoinResult[_JOIN_T]]):
@@ -74,9 +83,11 @@ class JoinOperationHandler(QueryHandler[JoinOperation, JoinResult[_JOIN_T]]):
                 == getattr(query.join_root.model, join_model.root_field),
             )
 
-        stmt = stmt.where(query.join_root.field == query.where_value)
+        if query.where_value:
+            stmt = stmt.where(query.join_root.field == query.where_value)
 
         rows = await self.__executor.execute(stmt)
+        rows = rows.unique()
 
         for row in rows:
             for i in row:
