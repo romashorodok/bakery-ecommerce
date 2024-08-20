@@ -1,7 +1,7 @@
 import asyncio
 import contextlib
 import os
-import threading
+from nats.aio.msg import Msg
 from nats.js import JetStreamContext
 from nats.js.api import (
     AckPolicy,
@@ -12,12 +12,10 @@ from nats.js.api import (
     StreamConfig,
 )
 from nats.js.errors import NotFoundError
-import time
 from typing import Any, Callable, Coroutine, TypeVar
 import fastapi
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bakery_ecommerce import worker
 from bakery_ecommerce.context_bus import ContextBus
 from bakery_ecommerce.internal.catalog.store.catalog_queries import (
     NormalizeCatalogItemsPosition,
@@ -47,6 +45,11 @@ import nats
 from nats.aio.client import Client as NATS
 
 import stripe
+
+from bakery_ecommerce.worker.stripe import (
+    charge_succeeded_worker_handler,
+    payment_intent_created_handler,
+)
 
 REQUEST_ATTR_T = TypeVar("REQUEST_ATTR_T")
 
@@ -95,23 +98,103 @@ def request_nats_session(
     return cache_request_attr(request, nc)
 
 
-async def spawn_worker(worker_f: Callable[..., Coroutine], *args):
+async def nats_worker_task(
+    stream: str,
+    consumer: ConsumerConfig,
+    consumer_name: str,
+    msg_cb_f: Callable[
+        [Msg, QueryProcessor, *tuple[Any, ...]], Coroutine[Any, Any, None]
+    ],
+    *args,
+):
+    lock = asyncio.Lock()
+    async with await nats.connect(nats_server) as nc:
+        print(
+            "{consumer_name} | connected {nats_server}".format(
+                consumer_name=consumer_name,
+                nats_server=nats_server,
+            )
+        )
+
+        async def cb(msg: Msg):
+            subject = msg.subject
+            reply = msg.reply
+            print(
+                "'{subject} {reply}' | Received a message".format(
+                    subject=subject,
+                    reply=reply,
+                )
+            )
+            try:
+                async with lock:
+                    await msg_cb_f(msg, query_processor_factory(nc), *args)
+
+            except ValueError as e:
+                await msg.ack()
+                print(
+                    "'{subject} {reply}' | Skip the message catch value error: {error}".format(
+                        subject=subject, reply=reply, error=e
+                    )
+                )
+            except Exception as e:
+                print(
+                    "'{subject} {reply}' | Error: {error}".format(
+                        subject=subject, reply=reply, error=e
+                    )
+                )
+
+            print(
+                "'{subject} {reply}' | Done ".format(
+                    subject=subject,
+                    reply=reply,
+                )
+            )
+
+        js = nc.jetstream()
+        sub = await js.subscribe_bind(
+            stream,
+            consumer=consumer_name,
+            config=consumer,
+            cb=cb,
+            manual_ack=True,
+        )
+        await asyncio.sleep(10)
+        await sub.unsubscribe()
+        async with lock:
+            await nc.drain()
+
+
+async def spawn_nats_worker(
+    stream: str,
+    consumer: ConsumerConfig,
+    consumer_name: str,
+    msg_cb_f: Callable[..., Coroutine],
+    *args,
+):
     loop = asyncio.get_running_loop()
     delay = 2.0
     while True:
         try:
-            await loop.create_task(worker_f(*args))
+            await loop.create_task(
+                nats_worker_task(
+                    stream,
+                    consumer,
+                    consumer_name,
+                    msg_cb_f,
+                    *args,
+                )
+            )
         except Exception as e:
             if "Event loop stopped before Future completed" in str(e):
                 print("Stop worker loop")
                 break
-
             print(f"catch error in loop routine. Delay {delay}. {e}")
-            time.sleep(delay)
+        finally:
+            await asyncio.sleep(delay)
 
 
-any_payment_intent_subject = "payment_intent.>"
-any_charge_subject = "charge.>"
+any_payment_intent_subject = "payment_intent.created.>"
+any_charge_subject = "charge.succeeded.>"
 
 payments_stripe_stream_config = StreamConfig(
     name="PAYMENTS_STRIPE",
@@ -131,7 +214,7 @@ def payments_stripe_payment_intent_created_consumer_config(
         name=consumer_name,
         deliver_policy=DeliverPolicy.ALL,
         deliver_group="payments_stripe_group_0",
-        deliver_subject="payment_intent",
+        deliver_subject="payment_intent.created",
         filter_subjects=["payment_intent.created.*"],
         ack_policy=AckPolicy.EXPLICIT,
     )
@@ -144,7 +227,7 @@ def payments_stripe_charge_succeeded_consumer_config(
         name=consumer_name,
         deliver_policy=DeliverPolicy.ALL,
         deliver_group="payments_stripe_group_0",
-        deliver_subject="charge",
+        deliver_subject="charge.succeeded",
         filter_subjects=["charge.succeeded.*"],
         ack_policy=AckPolicy.EXPLICIT,
     )
@@ -203,20 +286,25 @@ async def lifespan(_: fastapi.FastAPI):
     print("Use stripe secret key:", stripe_secret_key)
     stripe.api_key = stripe_secret_key
 
+    name = "stripe_charge_succeeded_consumer_0"
+    stream: str = payments_stripe_stream_config.name  # pyright: ignore
     asyncio.ensure_future(
-        spawn_worker(
-            worker.stripe.payment_intent_created_worker,
-            "payments_stripe_payment_intent_created_consumer_1",
-            nats_server,
+        spawn_nats_worker(
+            stream,
+            payments_stripe_charge_succeeded_consumer_config(name),
+            name,
+            charge_succeeded_worker_handler,
             session_manager,
         )
     )
 
+    name = "stripe_payment_intent_created_consumer_0"
     asyncio.ensure_future(
-        spawn_worker(
-            worker.stripe.charge_succeeded_worker,
-            "payments_stripe_charge_succeeded_worker_consumer_1",
-            nats_server,
+        spawn_nats_worker(
+            stream,
+            payments_stripe_payment_intent_created_consumer_config(name),
+            name,
+            payment_intent_created_handler,
             session_manager,
         )
     )

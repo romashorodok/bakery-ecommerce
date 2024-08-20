@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Annotated, Any, Self, TypedDict
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request
+from nats.js.errors import NoStreamResponseError
 
 from bakery_ecommerce import dependencies
 from bakery_ecommerce.composable import Composable, set_key
@@ -69,15 +70,20 @@ async def stripe_webhook_handler(
     nats: Annotated[NATS, Depends(dependencies.request_nats_session)],
 ):
     payload = await request.body()
-    stripe_signature = request.headers.get("stripe-signature")
+    # stripe_signature = request.headers.get("stripe-signature")
 
     js = nats.jetstream()
 
-    result = await js.publish(
-        subject=f"{body.type}.{body.data['object']['id']}",
-        stream="PAYMENTS_STRIPE",
-        payload=payload,
-    )
+    try:
+        await js.publish(
+            subject=f"{body.type}.{body.data['object']['id']}",
+            stream="PAYMENTS_STRIPE",
+            payload=payload,
+        )
+    except NoStreamResponseError:
+        print(
+            f"Receive not interested in stripe subject {body.type}.{body.data['object']['id']}"
+        )
 
 
 @dataclass
