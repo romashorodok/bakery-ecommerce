@@ -11,6 +11,8 @@ IDENTITY_SERVER_REFRESH_TOKEN_ROUTE =  "http://localhost:9000/api/identity/refre
 IDENTITY_SERVER_LOGOUT_ROUTE = "http://localhost:9000/api/identity"
 STRIPE_PUBLIC_KEY = "pk_test_..."
 
+OBJECT_STORE_ROUTE = "http://localhost:9001"
+
 PRODUCTS_ROUTE = "http://localhost:9000/api/products"
 CATALOGS_ROUTE = "http://localhost:9000/api/catalogs"
 FRONT_PAGE_ROUTE = "http://localhost:9000/api/front-page"

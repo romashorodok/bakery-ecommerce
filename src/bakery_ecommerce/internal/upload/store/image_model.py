@@ -1,5 +1,5 @@
-from sqlalchemy.orm import Mapped, mapped_column
 from bakery_ecommerce.internal.store.persistence.base import PersistanceBase, ScalarID
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Image(PersistanceBase, ScalarID):
@@ -9,4 +9,5 @@ class Image(PersistanceBase, ScalarID):
     original_file_hash: Mapped[str] = mapped_column()
     bucket: Mapped[str] = mapped_column()
     transcoded_file: Mapped[str | None] = mapped_column()
-    submited: Mapped[bool] = mapped_column(default=False)
+    transcoded_file_mime: Mapped[str | None] = mapped_column()
+

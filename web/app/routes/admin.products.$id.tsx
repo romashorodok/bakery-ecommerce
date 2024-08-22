@@ -6,6 +6,7 @@ import { hasDifferentValue, useModel } from "~/hooks/useModel"
 import { createRef, FormEvent, useEffect, useState } from "react"
 import { Button } from "~/components/ui/button"
 import { FileUploader } from "~/components/upload"
+import { cn } from "~/lib/utils"
 
 export const loader = async (loader: LoaderFunctionArgs) => {
   await sessionProtectedLoader(loader)
@@ -15,10 +16,13 @@ export const loader = async (loader: LoaderFunctionArgs) => {
     productId: params.id,
     productsRoute: cloudflare.env.PRODUCTS_ROUTE,
     imageRoute: cloudflare.env.IMAGE_ROUTE,
+    objectStoreRoute: cloudflare.env.OBJECT_STORE_ROUTE,
   })
 }
 
-type Product = { id: string, name: string, price: number }
+type Image = { bucket: string, original_file: string, transcoded_file_mime: string, original_file_hash: string, transcoded_file: string, id: string }
+type ProductImage = { product_id: string, image_id: string, featured: boolean, id: string, image: Image }
+type Product = { id: string, name: string, price: number, product_images: Array<ProductImage> }
 
 
 export default function AdminProductsById() {
@@ -112,7 +116,18 @@ export default function AdminProductsById() {
           <button type="submit">Update</button>
           <button type="reset">Reset</button>
         </form>
-        <FileUploader imageRoute={loaderData.imageRoute} />
+        <ul>
+          {data.product.product_images.map(product_image => (
+            <li>
+              <img className={cn(
+                "w-[440px] h-[247px]"
+              )}
+                src={`${loaderData.objectStoreRoute}/${product_image.image.bucket}/${product_image.image.transcoded_file || product_image.image.original_file}`} />
+            </li>
+          ))}
+        </ul>
+
+        <FileUploader product_id={data.product.id} imageRoute={loaderData.imageRoute} />
       </div>
     )
   }

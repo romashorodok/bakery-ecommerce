@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from datetime import timedelta
+from io import BytesIO
 import json
 from typing import override
 
 from minio import Minio
+from urllib3 import BaseHTTPResponse
 
 
 class ObjectStore(ABC):
@@ -15,6 +17,12 @@ class ObjectStore(ABC):
 
     @abstractmethod
     def create_bucket_if_not_exist(self, bucket: str): ...
+
+    @abstractmethod
+    def get_file(self, bucket: str, file: str) -> BaseHTTPResponse: ...
+
+    @abstractmethod
+    def put_bytes(self, bucket: str, file: str, data: BytesIO, length: int): ...
 
 
 def readonly_policy(bucket: str) -> str:
@@ -66,3 +74,12 @@ class MinioStore(ObjectStore):
         return self.__conn.presigned_put_object(
             bucket, file, expires=timedelta(minutes=5)
         )
+
+    @override
+    def get_file(self, bucket: str, file: str) -> BaseHTTPResponse:
+        return self.__conn.get_object(bucket, file)
+
+    @override
+    def put_bytes(self, bucket: str, file: str, data: BytesIO, length: int):
+        self.__conn.put_object(bucket, file, data, length)
+        return

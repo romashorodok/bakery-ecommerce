@@ -52,10 +52,9 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column(
-            "submited",
-            sa.Boolean,
-            nullable=False,
-            server_default="False",
+            "transcoded_file_mime",
+            sa.Text,
+            nullable=True,
         ),
     )
 

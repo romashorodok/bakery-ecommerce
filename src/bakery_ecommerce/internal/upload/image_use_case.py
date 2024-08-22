@@ -1,23 +1,24 @@
 from dataclasses import dataclass
 from uuid import uuid4
 import uuid
-from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from bakery_ecommerce.internal.store.crud_queries import CustomBuilder
+from nats.aio.client import Client as NATS
+
+from bakery_ecommerce.internal.store.crud_queries import (
+    CustomBuilder,
+)
+from bakery_ecommerce.internal.store.persistence.product import ProductImage
 from bakery_ecommerce.internal.store.query import QueryProcessor
-from bakery_ecommerce.internal.upload.image_events import GetPresignedUrlEvent
-from bakery_ecommerce.internal.upload.store.iamge_model import Image
+from bakery_ecommerce.internal.upload.image_events import (
+    GetPresignedUrlEvent,
+    SubmitImageUploadEvent,
+)
+from bakery_ecommerce.internal.upload.store.image_model import Image
 from bakery_ecommerce.object_store import ObjectStore
-
-
-class ImageAlreadyUploadedError(HTTPException):
-    def __init__(self, image: Image) -> None:
-        super().__init__(
-            409, "Image already uploaded. Delete it first or use existed", None
-        )
-        self.image = image
+from bakery_ecommerce import dependencies
+from bakery_ecommerce import nats_subjects
 
 
 @dataclass
@@ -34,7 +35,7 @@ class GetPresignedUrl:
     async def execute(self, params: GetPresignedUrlEvent):
         async def get_or_create_query(session: AsyncSession):
             stmt = select(Image).where(Image.original_file_hash == params.image_hash)
-            row = await params.session.execute(stmt)
+            row = await session.execute(stmt)
             result = row.unique().scalar()
             if result:
                 return result
@@ -52,8 +53,6 @@ class GetPresignedUrl:
         )
         if not image:
             raise ValueError(f"Not found image of the hash {params.image_hash}")
-        if image.submited:
-            raise ImageAlreadyUploadedError(image)
 
         self.__object_store.connect()
         url = self.__object_store.get_presigned_put_url(
@@ -61,3 +60,51 @@ class GetPresignedUrl:
             file=image.original_file,
         )
         return GetPresignedUrlResult(url, image.id)
+
+
+@dataclass
+class SubmitImageUploadResult:
+    product_image: ProductImage
+
+
+class SubmitImageUpload:
+    def __init__(self, queries: QueryProcessor, nats: NATS) -> None:
+        self.__queries = queries
+        self.__nats = nats
+
+    async def execute(self, params: SubmitImageUploadEvent):
+        async def get_or_create_query(session: AsyncSession):
+            stmt = select(ProductImage).where(
+                and_(
+                    ProductImage.product_id == params.product_id,
+                    ProductImage.image_id == params.image_id,
+                )
+            )
+            row = await session.execute(stmt)
+            result = row.unique().scalar()
+            if result:
+                return result
+
+            product_image = ProductImage()
+            product_image.product_id = params.product_id
+            product_image.image_id = params.image_id
+            session.add(product_image)
+            await session.flush()
+            return product_image
+
+        product_image = await self.__queries.process(
+            params.session, CustomBuilder(get_or_create_query)
+        )
+
+        js = self.__nats.jetstream()
+        await js.publish(
+            dependencies.product_image_transcoding_required_subject(
+                str(product_image.id),
+            ),
+            nats_subjects.ProductImageTranscodingRequired(
+                image_id=str(product_image.image_id),
+            ).to_bytes(),
+            stream=dependencies.product_images_transcoding_stream_config.name,
+        )
+
+        return SubmitImageUploadResult(product_image)

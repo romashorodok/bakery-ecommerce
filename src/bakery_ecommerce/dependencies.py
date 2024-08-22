@@ -1,5 +1,7 @@
 import asyncio
 import contextlib
+from dataclasses import dataclass
+import json
 import os
 from typing import Any, Callable, Coroutine, Generator, TypeVar
 
@@ -30,6 +32,7 @@ from bakery_ecommerce.internal.store.session import (
     PostgresDatabaseConfig,
 )
 from bakery_ecommerce.object_store import MinioStore, ObjectStore
+from bakery_ecommerce.worker.image import product_image_transcoding_handler
 from bakery_ecommerce.worker.stripe import (
     charge_succeeded_worker_handler,
     payment_intent_created_handler,
@@ -79,6 +82,14 @@ def request_transaction(
 async def session():
     async with session_manager.session() as session:
         yield session
+
+
+def minio_object_store_factory() -> MinioStore:
+    return MinioStore()
+
+
+def request_object_store() -> Generator[ObjectStore, Any, None]:
+    yield minio_object_store_factory()
 
 
 nats_server = "nats://localhost:4222"
@@ -204,6 +215,31 @@ payments_stripe_stream_config = StreamConfig(
 )
 
 
+def product_image_transcoding_required_subject(wildcard: str) -> str:
+    return f"image.transcoding.required.{wildcard}"
+
+
+product_images_transcoding_stream_config = StreamConfig(
+    name="PRODUCT_IMAGES_TRANSCODING",
+    retention=RetentionPolicy.WORK_QUEUE,
+    discard=DiscardPolicy.OLD,
+    subjects=[
+        product_image_transcoding_required_subject(">"),
+    ],
+)
+
+
+def product_images_transcoding_consumer_config(consumer_name: str) -> ConsumerConfig:
+    return ConsumerConfig(
+        name=consumer_name,
+        deliver_policy=DeliverPolicy.ALL,
+        deliver_group="product_images_transcoding_group_0",
+        deliver_subject="image.transcoding.required",
+        filter_subjects=[product_image_transcoding_required_subject("*")],
+        ack_policy=AckPolicy.EXPLICIT,
+    )
+
+
 def payments_stripe_payment_intent_created_consumer_config(
     consumer_name: str,
 ) -> ConsumerConfig:
@@ -236,10 +272,10 @@ async def get_or_create_stream(js: JetStreamContext, config: StreamConfig):
 
     try:
         stream = await js.stream_info(config.name)
-        stream = await js.update_stream(payments_stripe_stream_config)
+        stream = await js.update_stream(config)
     except NotFoundError as e:
         print(f"not found stream {e}", type(e))
-        stream = await js.add_stream(payments_stripe_stream_config)
+        stream = await js.add_stream(config)
 
     return stream
 
@@ -264,6 +300,7 @@ async def lifespan(_: fastapi.FastAPI):
     async with await nats.connect(nats_server) as nc:
         js = nc.jetstream()
         await get_or_create_stream(js, payments_stripe_stream_config)
+        await get_or_create_stream(js, product_images_transcoding_stream_config)
         await get_or_create_consumer(
             js,
             payments_stripe_stream_config,
@@ -276,6 +313,13 @@ async def lifespan(_: fastapi.FastAPI):
             payments_stripe_stream_config,
             payments_stripe_charge_succeeded_consumer_config(
                 "stripe_charge_succeeded_0"
+            ),
+        )
+        await get_or_create_consumer(
+            js,
+            product_images_transcoding_stream_config,
+            product_images_transcoding_consumer_config(
+                "product_images_transcoding_0",
             ),
         )
 
@@ -306,6 +350,19 @@ async def lifespan(_: fastapi.FastAPI):
         )
     )
 
+    name = "product_images_transcoding_consumer_0"
+    stream: str = product_images_transcoding_stream_config.name  # pyright: ignore
+    asyncio.ensure_future(
+        spawn_nats_worker(
+            stream,
+            product_images_transcoding_consumer_config(name),
+            name,
+            product_image_transcoding_handler,
+            session_manager,
+            minio_object_store_factory(),
+        )
+    )
+
     yield
 
     if not session_manager.is_closed():
@@ -330,14 +387,6 @@ def query_processor_factory(nats: NATS) -> QueryProcessor:
 
 def query_processor(nats: NATS = fastapi.Depends(request_nats_session)):
     yield QueryProcessor(query_handlers, QueryCache(nats))
-
-
-def minio_object_store_factory() -> MinioStore:
-    return MinioStore()
-
-
-def request_object_store() -> Generator[ObjectStore, Any, None]:
-    yield minio_object_store_factory()
 
 
 def request_query_processor(

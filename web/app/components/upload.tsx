@@ -41,7 +41,15 @@ async function imageHash(image: File) {
   return blockhashData(imageData, 16, 2);
 }
 
-export function FileUploader({ imageRoute }: { imageRoute: string }) {
+// async function sha256FromFile(file: File) {
+//   const arrayBuffer = await file.arrayBuffer();
+//   const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+//   const hashArray = Array.from(new Uint8Array(hashBuffer));
+//   const hashHex = hashArray.map(byte => byte.toString(16).padStart(2, '0')).join('');
+//   return hashHex;
+// }
+
+export function FileUploader({ product_id, imageRoute }: { product_id: string, imageRoute: string }) {
   const imageRef = createRef<HTMLImageElement>()
   const [image, setImage] = useState<File | undefined>()
   const { fetch } = useAuthFetch()
@@ -49,7 +57,7 @@ export function FileUploader({ imageRoute }: { imageRoute: string }) {
   const mutationUpload = useMutation({
     mutationKey: ["file-uploader"],
     mutationFn: async (image_hash: string) => {
-      const response = await fetch(imageRoute, {
+      let response = await fetch(imageRoute, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -64,6 +72,16 @@ export function FileUploader({ imageRoute }: { imageRoute: string }) {
       await window.fetch(result.image.upload_url, {
         method: "PUT",
         body: image,
+      })
+      response = await fetch(`${imageRoute}/${result.image.id}/submit`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          image_hash,
+          product_id,
+        })
       })
       return { success: true }
     }
