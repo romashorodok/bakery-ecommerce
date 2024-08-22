@@ -5,9 +5,7 @@ import { useAuthFetch } from "~/hooks/useAuthFetch"
 import { hasDifferentValue, useModel } from "~/hooks/useModel"
 import { createRef, FormEvent, useEffect, useState } from "react"
 import { Button } from "~/components/ui/button"
-import PNG from "~/lib/blockhash/third_party/png_js/png"
-import { decode as JPEGDecoder } from "~/lib/blockhash/third_party/jpeg_js/decoder"
-import { blockhashData } from "~/lib/blockhash/blockhash"
+import { FileUploader } from "~/components/upload"
 
 export const loader = async (loader: LoaderFunctionArgs) => {
   await sessionProtectedLoader(loader)
@@ -16,91 +14,12 @@ export const loader = async (loader: LoaderFunctionArgs) => {
   return json({
     productId: params.id,
     productsRoute: cloudflare.env.PRODUCTS_ROUTE,
+    imageRoute: cloudflare.env.IMAGE_ROUTE,
   })
 }
 
 type Product = { id: string, name: string, price: number }
 
-type ImageData = { width: number, height: number, data: Uint8Array }
-
-function FileUploader() {
-
-  const imageCanvas = createRef<HTMLCanvasElement>()
-  const imageRef = createRef<HTMLImageElement>()
-
-  function uploadImage(evt: FormEvent<HTMLFormElement>) {
-    evt.preventDefault()
-    console.log(evt)
-  }
-
-  async function imageHash(evt: FormEvent<HTMLFormElement>) {
-    evt.preventDefault()
-    const input = evt.target as HTMLInputElement
-    if (!input.files) return
-    const image = input.files[0]
-    if (!image) return
-    const mime = image.type
-
-    const buf = await image.arrayBuffer()
-    let imageData: ImageData
-
-    try {
-      switch (mime) {
-        case "image/png":
-          const png = new PNG(new Uint8Array(buf))
-          imageData = {
-            width: png.width,
-            height: png.height,
-            data: png.decodePixels(),
-          }
-          break
-        case "image/jpeg":
-          imageData = JPEGDecoder(buf, {
-            useTArray: true,
-            tolerantDecoding: false,
-          })
-          break
-        default:
-          throw new Error("Unknown mime type")
-      }
-    } catch (e) {
-      console.error("Unable upload image. Err:", e)
-      return
-    }
-
-    const hash = blockhashData(imageData, 16, 2);
-    console.log(hash)
-
-    // const canvas = imageCanvas.current
-    // if (!canvas) throw new Error("Not found canvas element")
-    //
-    // const context = canvas.getContext('2d');
-    // if (context) {
-    //   canvas.width = png.width;
-    //   canvas.height = png.height;
-    //
-    //   // Render the PNG onto the canvas
-    //   png.render(canvas);
-    //
-    //   const imageSrc = imageRef.current
-    //   if (!imageSrc) return
-    //   imageSrc.src = canvas.toDataURL()
-    // }
-
-  }
-
-  return (
-    <form onChange={imageHash}>
-      <img className="w-[300px] h-[300px]" ref={imageRef} />
-
-      <input type="file" name="image" accept="image/png,image/jpeg" />
-      <Button type="submit">
-        Change image
-      </Button>
-      <canvas ref={imageCanvas} ></canvas>
-    </form>
-  )
-}
 
 export default function AdminProductsById() {
   const loaderData = useLoaderData<typeof loader>()
@@ -193,7 +112,7 @@ export default function AdminProductsById() {
           <button type="submit">Update</button>
           <button type="reset">Reset</button>
         </form>
-        <FileUploader />
+        <FileUploader imageRoute={loaderData.imageRoute} />
       </div>
     )
   }

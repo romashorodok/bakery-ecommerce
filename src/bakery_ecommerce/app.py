@@ -30,5 +30,6 @@ api_v1.front_page.register_handler(__api_v1)
 api_v1.cart.register_handler(__api_v1)
 api_v1.payment.register_handler(__api_v1)
 api_v1.order.register_handler(__api_v1)
+api_v1.image.register_handler(__api_v1)
 
 app.include_router(__api_v1)

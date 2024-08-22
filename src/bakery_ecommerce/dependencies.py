@@ -1,21 +1,11 @@
 import asyncio
 import contextlib
 import os
-from nats.aio.msg import Msg
-from nats.js import JetStreamContext
-from nats.js.api import (
-    AckPolicy,
-    ConsumerConfig,
-    DeliverPolicy,
-    DiscardPolicy,
-    RetentionPolicy,
-    StreamConfig,
-)
-from nats.js.errors import NotFoundError
-from typing import Any, Callable, Coroutine, TypeVar
-import fastapi
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any, Callable, Coroutine, Generator, TypeVar
 
+import fastapi
+import nats
+import stripe
 from bakery_ecommerce.context_bus import ContextBus
 from bakery_ecommerce.internal.catalog.store.catalog_queries import (
     NormalizeCatalogItemsPosition,
@@ -25,6 +15,7 @@ from bakery_ecommerce.internal.identity.store.private_key_session_queries import
     GetPrivateKeySignature,
     GetPrivateKeySignatureHandler,
 )
+from bakery_ecommerce.internal.store import crud_queries, product_queries
 from bakery_ecommerce.internal.store.join_queries import (
     JoinOperation,
     JoinOperationHandler,
@@ -38,18 +29,24 @@ from bakery_ecommerce.internal.store.session import (
     DatabaseSessionManager,
     PostgresDatabaseConfig,
 )
-from bakery_ecommerce.internal.store import crud_queries
-from bakery_ecommerce.internal.store import product_queries
-
-import nats
-from nats.aio.client import Client as NATS
-
-import stripe
-
+from bakery_ecommerce.object_store import MinioStore, ObjectStore
 from bakery_ecommerce.worker.stripe import (
     charge_succeeded_worker_handler,
     payment_intent_created_handler,
 )
+from nats.aio.client import Client as NATS
+from nats.aio.msg import Msg
+from nats.js import JetStreamContext
+from nats.js.api import (
+    AckPolicy,
+    ConsumerConfig,
+    DeliverPolicy,
+    DiscardPolicy,
+    RetentionPolicy,
+    StreamConfig,
+)
+from nats.js.errors import NotFoundError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 REQUEST_ATTR_T = TypeVar("REQUEST_ATTR_T")
 
@@ -333,6 +330,14 @@ def query_processor_factory(nats: NATS) -> QueryProcessor:
 
 def query_processor(nats: NATS = fastapi.Depends(request_nats_session)):
     yield QueryProcessor(query_handlers, QueryCache(nats))
+
+
+def minio_object_store_factory() -> MinioStore:
+    return MinioStore()
+
+
+def request_object_store() -> Generator[ObjectStore, Any, None]:
+    yield minio_object_store_factory()
 
 
 def request_query_processor(

@@ -5,3 +5,4 @@ from . import front_page as front_page
 from . import cart as cart
 from . import payment as payment
 from . import order as order
+from . import image as image

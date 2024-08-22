@@ -19,6 +19,7 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = ["623f8d4ed580"]
 
 images = "images"
+product_images = "product_images"
 
 
 def upgrade() -> None:
@@ -30,9 +31,55 @@ def upgrade() -> None:
             primary_key=True,
             server_default=sa.text("gen_random_uuid()"),
         ),
+        sa.Column(
+            "original_file",
+            sa.Text,
+            nullable=False,
+        ),
+        sa.Column(
+            "original_file_hash",
+            sa.Text,
+            nullable=False,
+        ),
+        sa.Column(
+            "bucket",
+            sa.Text,
+            nullable=False,
+        ),
+        sa.Column(
+            "transcoded_file",
+            sa.Text,
+            nullable=True,
+        ),
+        sa.Column(
+            "submited",
+            sa.Boolean,
+            nullable=False,
+            server_default="False",
+        ),
     )
-    pass
+
+    op.create_table(
+        product_images,
+        sa.Column(
+            "id",
+            sa.UUID,
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column("product_id", sa.UUID, nullable=False),
+        sa.Column("image_id", sa.UUID, nullable=False),
+        sa.Column(
+            "featured",
+            sa.Boolean,
+            nullable=False,
+            server_default="False",
+        ),
+        sa.ForeignKeyConstraint(["product_id"], ["products.id"]),
+        sa.ForeignKeyConstraint(["image_id"], ["images.id"]),
+    )
 
 
 def downgrade() -> None:
-    pass
+    op.execute(f"DROP TABLE IF EXISTS {images} CASCADE;")
+    op.execute(f"DROP TABLE IF EXISTS {product_images} CASCADE;")
