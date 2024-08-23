@@ -60,18 +60,22 @@ import { cn } from "~/lib/utils"
 
 export const loader = async (loader: LoaderFunctionArgs) => {
   await sessionProtectedLoader(loader)
-  const { CART_ROUTE } = loader.context.cloudflare.env
+  const { CART_ROUTE, OBJECT_STORE_ROUTE } = loader.context.cloudflare.env
 
   return json({
     cartsRoute: CART_ROUTE,
+    objectStoreRoute: OBJECT_STORE_ROUTE,
   })
 }
 
-type Product = { price: number, name: string, updated_at: string, created_at: string, id: string }
+type Image = { bucket: string, original_file: string, transcoded_file_mime: string, original_file_hash: string, transcoded_file: string, id: string }
+type ProductImage = { product_id: string, image_id: string, featured: boolean, id: string, image: Image }
+type Product = { id: string, name: string, price: number, product_images: Array<ProductImage> }
+
 type CartItem = { cart_id: string, product_id: string, quantity: number, id: string, product: Product }
 type Cart = { user_id: string, id: string, cart_items: Array<CartItem>, total_price: number }
 
-function CartItemView({ cartsRoute, id, quantity, product_id, product: { name, price } }: CartItem & { cartsRoute: string }) {
+function CartItemView({ cartsRoute, id, quantity, product_id, objectStoreRoute, product: { name, price, product_images } }: CartItem & { cartsRoute: string, objectStoreRoute: string }) {
   const { fetch } = useAuthFetch()
   const client = useQueryClient()
 
@@ -89,6 +93,8 @@ function CartItemView({ cartsRoute, id, quantity, product_id, product: { name, p
     onSuccess: () => client.invalidateQueries({ queryKey: ["cart"] })
   })
 
+  const featuredImage = product_images.find(image => image.featured);
+
   return (
     <Card key={id}>
       <CardHeader className="cursor-pointer">
@@ -100,7 +106,10 @@ function CartItemView({ cartsRoute, id, quantity, product_id, product: { name, p
             <TableRow className="flex place-items-center hover:bg-transparent focus:outline-none">
               <TableCell className="flex-[1]">
                 <AspectRatio ratio={16 / 9} className="bg-muted">
-                  <img src='/sample.webp' className="rounded-md object-cover w-full h-full" />
+                  {featuredImage ?
+                    <img src={`${objectStoreRoute}/${featuredImage.image.bucket}/${featuredImage?.image.transcoded_file || featuredImage?.image.original_file}`} className="rounded-md object-cover w-full h-full" />
+                    : null
+                  }
                 </AspectRatio>
               </TableCell>
               <TableCell className="flex-[1] sm:table-cell">
@@ -147,7 +156,7 @@ export default function CartIndex() {
   const { mobile } = useResponsive()
 
   const { fetch } = useAuthFetch()
-  const { cartsRoute } = useLoaderData<typeof loader>()
+  const { cartsRoute, objectStoreRoute } = useLoaderData<typeof loader>()
 
   const model = useQuery({
     queryKey: ["cart"],
@@ -171,7 +180,7 @@ export default function CartIndex() {
         `${mobile ? 'flex-col-reverse' : 'flex-row'}`
       )}>
         <div className={"flex-[2] flex flex-col gap-2 px-2 overflow-scroll"}>
-          {model.data.cart.cart_items.map(i => <CartItemView key={i.id} cartsRoute={cartsRoute}  {...i} />)}
+          {model.data.cart.cart_items.map(i => <CartItemView key={i.id} objectStoreRoute={objectStoreRoute} cartsRoute={cartsRoute}  {...i} />)}
         </div>
         <div className="flex-[1]">
           <Card

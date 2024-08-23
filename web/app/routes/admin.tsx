@@ -10,7 +10,8 @@ import {
   Settings,
   User,
   LayoutTemplateIcon,
-  Layers3
+  Layers3,
+  ListOrdered
 } from "lucide-react"
 
 import {
@@ -44,7 +45,7 @@ const navItems = [
   { label: "Products", to: "/admin/products", Icon: Package },
   { label: "Frontpage", to: "/admin/frontpage", Icon: LayoutTemplateIcon },
   { label: "Catalogs", to: "/admin/catalogs", Icon: Layers3 },
-  { label: "Orders", to: "/admin/orders", Icon: Layers3 }
+  { label: "Orders", to: "/admin/orders", Icon: ListOrdered }
 ];
 
 

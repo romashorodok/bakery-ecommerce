@@ -37,10 +37,13 @@ import {
 export const loader = async ({ context: { cloudflare } }: LoaderFunctionArgs) => {
   return json({
     productsRoute: cloudflare.env.PRODUCTS_ROUTE,
+    objectStoreRoute: cloudflare.env.OBJECT_STORE_ROUTE,
   })
 }
 
-type Product = { id: string, name: string, price: number }
+type Image = { bucket: string, original_file: string, transcoded_file_mime: string, original_file_hash: string, transcoded_file: string, id: string }
+type ProductImage = { product_id: string, image_id: string, featured: boolean, id: string, image: Image }
+type Product = { id: string, name: string, price: number, product_images: Array<ProductImage> }
 
 function useProductFetcher() {
   const loaderData = useLoaderData<typeof loader>()
@@ -73,6 +76,7 @@ function useProductFetcher() {
 
 export default function AdminProducts() {
   const { products } = useProductFetcher()
+  const { objectStoreRoute } = useLoaderData<typeof loader>()
 
   useEffect(() => {
     console.log(products)
@@ -121,47 +125,53 @@ export default function AdminProducts() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {products.data.products.map(item => (
-                  <TableRow key={item.id}>
-                    <TableCell className="hidden sm:table-cell">
-                      <h1 className="text-xs">{item.id}</h1>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      <AspectRatio ratio={16 / 9} className="bg-muted">
-                        <img src='/sample.webp' className="rounded-md object-cover w-full h-full" />
-                      </AspectRatio>
-                    </TableCell>
-                    <TableCell className="sm:table-cell">
-                      {item.name}
-                    </TableCell>
-                    <TableCell className="sm:table-cell">
-                      {item.price}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            aria-haspopup="true"
-                            size="icon"
-                            variant="ghost"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Toggle menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <Link to={`/admin/products/${item.id}`}>
-                            <DropdownMenuItem>
-                              Edit
-                            </DropdownMenuItem>
-                          </Link>
-                          <DropdownMenuItem>Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {products.data.products.map(item => {
+                  const featuredImage = item.product_images.find(image => image.featured);
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className="hidden sm:table-cell">
+                        <h1 className="text-xs">{item.id}</h1>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <AspectRatio ratio={16 / 9} className="bg-muted">
+                          {featuredImage ?
+                            <img src={`${objectStoreRoute}/${featuredImage.image.bucket}/${featuredImage?.image.transcoded_file || featuredImage?.image.original_file}`} className="rounded-md object-cover w-full h-full" />
+                            : null
+                          }
+                        </AspectRatio>
+                      </TableCell>
+                      <TableCell className="sm:table-cell">
+                        {item.name}
+                      </TableCell>
+                      <TableCell className="sm:table-cell">
+                        {item.price}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              aria-haspopup="true"
+                              size="icon"
+                              variant="ghost"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Toggle menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <Link to={`/admin/products/${item.id}`}>
+                              <DropdownMenuItem>
+                                Edit
+                              </DropdownMenuItem>
+                            </Link>
+                            <DropdownMenuItem>Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
           </CardContent>

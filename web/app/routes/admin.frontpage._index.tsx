@@ -17,6 +17,7 @@ export const loader = async (loader: LoaderFunctionArgs) => {
     frontPageRoute: cloudflare.env.FRONT_PAGE_ROUTE,
     catalogsRoute: cloudflare.env.CATALOGS_ROUTE,
     productsRoute: cloudflare.env.PRODUCTS_ROUTE,
+    objectStoreRoute: cloudflare.env.OBJECT_STORE_ROUTE,
   })
 }
 
@@ -129,7 +130,9 @@ function Catalogs({ frontPageId, catalogId }: { catalogId: string, frontPageId: 
   </div>
 }
 
-type Product = { id: string, name: string }
+type Image = { bucket: string, original_file: string, transcoded_file_mime: string, original_file_hash: string, transcoded_file: string, id: string }
+type ProductImage = { product_id: string, image_id: string, featured: boolean, id: string, image: Image }
+type Product = { id: string, name: string, price: number, product_images: Array<ProductImage> }
 
 function useModelSelector({ productsRoute, catalogsRoute, catalogId, catalogItemId }: { productsRoute: string, catalogsRoute: string, catalogId: string, catalogItemId: string }) {
   const { fetch } = useAuthFetch()
@@ -263,7 +266,7 @@ function useModelSelector({ productsRoute, catalogsRoute, catalogId, catalogItem
   };
 }
 
-function CatalogItem({ productsRoute, catalogsRoute, ...props }: CatalogItem & { catalogsRoute: string, productsRoute: string }) {
+function CatalogItem({ productsRoute, catalogsRoute, objectStoreRoute, ...props }: CatalogItem & { catalogsRoute: string, productsRoute: string, objectStoreRoute: string }) {
   const { fetch } = useAuthFetch()
   const client = useQueryClient()
   const { Selector } = useModelSelector({
@@ -297,24 +300,24 @@ function CatalogItem({ productsRoute, catalogsRoute, ...props }: CatalogItem & {
       </div>
       <Selector />
     </div>
-    <CatalogCard debug={false}  {...props} />
+    <CatalogCard debug={false} objectStoreRoute={objectStoreRoute}  {...props} />
   </div>
 }
 
-function FrontPageCatalogItems({ catalog_items, catalogsRoute, productsRoute }: { productsRoute: string, catalogsRoute: string, catalog_items: Array<CatalogItem> }) {
+function FrontPageCatalogItems({ catalog_items, catalogsRoute, productsRoute, objectStoreRoute }: { productsRoute: string, catalogsRoute: string, objectStoreRoute: string, catalog_items: Array<CatalogItem> }) {
   const items = useMemo(() =>
     catalog_items.sort((a, b) => a.position - b.position),
     [catalog_items])
 
   return (
     <div className="grid grid-cols-2 gap-4">
-      {items.map(i => <CatalogItem key={i.id} productsRoute={productsRoute} catalogsRoute={catalogsRoute} {...i} />)}
+      {items.map(i => <CatalogItem key={i.id} objectStoreRoute={objectStoreRoute} productsRoute={productsRoute} catalogsRoute={catalogsRoute} {...i} />)}
     </div>
   )
 }
 
 export default function AdminFrontpageIndex() {
-  const { catalogsRoute, productsRoute, frontPageRoute } = useLoaderData<typeof loader>()
+  const { catalogsRoute, productsRoute, frontPageRoute, objectStoreRoute } = useLoaderData<typeof loader>()
   const { model } = useFrontPage({ frontPageRoute: frontPageRoute })
 
   return (
@@ -329,7 +332,7 @@ export default function AdminFrontpageIndex() {
 
           {model.data?.catalog_items &&
             <div>
-              <FrontPageCatalogItems productsRoute={productsRoute} catalogsRoute={catalogsRoute} catalog_items={model.data.catalog_items} />
+              <FrontPageCatalogItems objectStoreRoute={objectStoreRoute} productsRoute={productsRoute} catalogsRoute={catalogsRoute} catalog_items={model.data.catalog_items} />
             </div>
           }
 

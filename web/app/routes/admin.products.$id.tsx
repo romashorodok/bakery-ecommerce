@@ -7,7 +7,8 @@ import { createRef, FormEvent, useEffect, useState } from "react"
 import { Button } from "~/components/ui/button"
 import { FileUploader } from "~/components/upload"
 import { cn } from "~/lib/utils"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { Check } from "lucide-react"
 
 export const loader = async (loader: LoaderFunctionArgs) => {
   await sessionProtectedLoader(loader)
@@ -28,6 +29,7 @@ type Product = { id: string, name: string, price: number, product_images: Array<
 
 export default function AdminProductsById() {
   const loaderData = useLoaderData<typeof loader>()
+  const client = useQueryClient()
 
   if (!loaderData.productId) {
     return (
@@ -71,7 +73,8 @@ export default function AdminProductsById() {
       })
       if (!response || !response.ok) throw new Error("Something goes wrong...")
       return response.json<{ success: boolean }>()
-    }
+    },
+    onSuccess: () => client.invalidateQueries({ queryKey: ["product"] })
   })
 
   function submitFeaturedImage(e: FormEvent<HTMLFormElement>, params: { product_id: string, image_id: string }) {
@@ -143,10 +146,19 @@ export default function AdminProductsById() {
               <h1>
                 Is featured: {JSON.stringify(product_image.featured)}
               </h1>
-              <img className={cn(
-                "w-[440px] h-[247px]"
-              )}
-                src={`${loaderData.objectStoreRoute}/${product_image.image.bucket}/${product_image.image.transcoded_file || product_image.image.original_file}`} />
+
+              <div className={"inline-block relative"}>
+                <img className={cn(
+                  "w-[440px] h-[247px]",
+                )}
+                  src={`${loaderData.objectStoreRoute}/${product_image.image.bucket}/${product_image.image.transcoded_file || product_image.image.original_file}`} />
+                {product_image.featured &&
+                  <div className={`absolute bg-white top-[8px] right-[8px] rounded`} >
+                    <Check />
+                  </div>
+                }
+              </div>
+
               <form onSubmit={(e) => submitFeaturedImage(e, {
                 product_id: product_image.product_id,
                 image_id: product_image.image_id,

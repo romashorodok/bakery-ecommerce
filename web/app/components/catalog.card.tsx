@@ -9,7 +9,10 @@ import {
 import { AspectRatio } from "~/components/ui/aspect-ratio"
 import { PropsWithChildren } from "react"
 
-type Product = { id: string, name: string }
+
+type Image = { bucket: string, original_file: string, transcoded_file_mime: string, original_file_hash: string, transcoded_file: string, id: string }
+type ProductImage = { product_id: string, image_id: string, featured: boolean, id: string, image: Image }
+type Product = { id: string, name: string, price: number, product_images: Array<ProductImage> }
 
 type CatalogItem = {
   available: boolean,
@@ -21,7 +24,7 @@ type CatalogItem = {
   product: Product | null
 }
 
-export default function ({ position, available, visible, catalog_id, id, product_id, product, debug, children }: PropsWithChildren<CatalogItem & { debug: boolean }>) {
+export default function({ position, available, visible, catalog_id, id, product_id, product, debug, children, objectStoreRoute }: PropsWithChildren<CatalogItem & { debug: boolean, objectStoreRoute: string }>) {
   return (
     <div key={id}>
       {debug &&
@@ -36,7 +39,7 @@ export default function ({ position, available, visible, catalog_id, id, product
       }
       {product
         ? (
-          <ProductCard debug={debug} {...product}>{children}</ProductCard>
+          <ProductCard debug={debug} objectStoreRoute={objectStoreRoute}  {...product}>{children}</ProductCard>
         )
         : <Card x-chunk="dashboard-01-chunk-0 z-10">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

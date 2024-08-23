@@ -7,9 +7,13 @@ import {
 import { AspectRatio } from "~/components/ui/aspect-ratio"
 import { PropsWithChildren } from "react"
 
-type Product = { id: string, name: string, price: number }
+type Image = { bucket: string, original_file: string, transcoded_file_mime: string, original_file_hash: string, transcoded_file: string, id: string }
+type ProductImage = { product_id: string, image_id: string, featured: boolean, id: string, image: Image }
+type Product = { id: string, name: string, price: number, product_images: Array<ProductImage> }
 
-export default function ({ id, name, debug, children, price }: PropsWithChildren<Product & { debug: boolean }>) {
+export default function({ id, name, debug, children, price, product_images, objectStoreRoute }: PropsWithChildren<Product & { debug: boolean, objectStoreRoute: string }>) {
+  const featuredImage = product_images.find(image => image.featured);
+
   return (
     <Card x-chunk="dashboard-01-chunk-0 z-10">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -21,7 +25,11 @@ export default function ({ id, name, debug, children, price }: PropsWithChildren
         <div className="text-2xl font-bold">{price}</div>
 
         <AspectRatio ratio={16 / 9} className="bg-muted">
-          <img src='/sample.webp' className="rounded-md object-cover w-full h-full" />
+          {featuredImage ?
+            <img src={`${objectStoreRoute}/${featuredImage.image.bucket}/${featuredImage?.image.transcoded_file || featuredImage?.image.original_file}`} className="rounded-md object-cover w-full h-full" />
+            : null
+          }
+
         </AspectRatio>
 
         {debug &&

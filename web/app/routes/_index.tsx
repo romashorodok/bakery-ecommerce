@@ -22,7 +22,9 @@ export const meta: MetaFunction = () => {
 
 type FrontPage = { id: number, catalog_id: string }
 
-type Product = { id: string, name: string }
+type Image = { bucket: string, original_file: string, transcoded_file_mime: string, original_file_hash: string, transcoded_file: string, id: string }
+type ProductImage = { product_id: string, image_id: string, featured: boolean, id: string, image: Image }
+type Product = { id: string, name: string, price: number, product_images: Array<ProductImage> }
 
 type CatalogItem = {
   available: boolean,
@@ -50,11 +52,12 @@ export const loader = async (loader: LoaderFunctionArgs) => {
   return json({
     catalog_items: data.catalog_items.sort((a, b) => a.position - b.position),
     cartRoute: cloudflare.env.CART_ROUTE,
+    objectStoreRoute: cloudflare.env.OBJECT_STORE_ROUTE,
   })
 }
 
 export default function Index() {
-  const { catalog_items, cartRoute } = useLoaderData<typeof loader>()
+  const { catalog_items, cartRoute, objectStoreRoute } = useLoaderData<typeof loader>()
   const { addToCartMutation } = useAddToCart({ cartRoute })
   const { fetch } = useAuthFetch()
   const { accessToken } = useOutletContext<AppContext>()
@@ -88,7 +91,7 @@ export default function Index() {
         `${width >= 667 ? 'grid-cols-2' : 'grid-cols-1'}`
       )}>
         {catalog_items.map(item =>
-          <CatalogCard key={item.id} debug={false} {...item}>
+          <CatalogCard key={item.id} objectStoreRoute={objectStoreRoute} debug={false} {...item}>
             <Button size="sm" className="top-[5px] right-[10px] h-7 gap-1" onClick={() => addToCart(item.product_id)} >
               <ShoppingBag className="h-3.5 w-3.5" />
               Buy

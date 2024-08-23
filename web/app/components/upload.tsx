@@ -117,7 +117,7 @@ export function FileUploader({ product_id, imageRoute }: { product_id: string, i
 
       <input type="file" name="image" accept="image/png,image/jpeg" />
       <Button type="submit">
-        Change image
+        Create image
       </Button>
     </form>
   )

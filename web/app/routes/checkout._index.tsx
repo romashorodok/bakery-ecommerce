@@ -49,6 +49,7 @@ export const loader = async ({ context: { cloudflare: { env } } }: LoaderFunctio
     stripePubkey: env.STRIPE_PUBLIC_KEY,
     paymentRoute: env.PAYMENT_ROUTE,
     orderRoute: env.ORDER_ROUTE,
+    objectStoreRoute: env.OBJECT_STORE_ROUTE,
   })
 }
 
@@ -189,7 +190,9 @@ type PaymentDetail = {
   payment_provider: PAYMENT_PROVIDER_KEY
 }
 
-type Product = { price: number, name: string, updated_at: string, created_at: string, id: string }
+type Image = { bucket: string, original_file: string, transcoded_file_mime: string, original_file_hash: string, transcoded_file: string, id: string }
+type ProductImage = { product_id: string, image_id: string, featured: boolean, id: string, image: Image }
+type Product = { id: string, name: string, price: number, product_images: Array<ProductImage> }
 
 type OrderItem = {
   order_id: string,
@@ -211,7 +214,9 @@ type Order = {
   order_items: Array<OrderItem>
 }
 
-function OrderItemView({ id, quantity, price, product: { name } }: OrderItem) {
+function OrderItemView({ id, quantity, price, objectStoreRoute, product: { name, product_images } }: OrderItem & { objectStoreRoute: string }) {
+  const featuredImage = product_images.find(image => image.featured);
+
   return (
     <Card key={id} className="w-[400px]">
       <CardHeader className="cursor-pointer">
@@ -223,7 +228,10 @@ function OrderItemView({ id, quantity, price, product: { name } }: OrderItem) {
             <TableRow className="flex place-items-center hover:bg-transparent focus:outline-none">
               <TableCell className="flex-[1]">
                 <AspectRatio ratio={16 / 9} className="bg-muted">
-                  <img src='/sample.webp' className="rounded-md object-cover w-full h-full" />
+                  {featuredImage ?
+                    <img src={`${objectStoreRoute}/${featuredImage.image.bucket}/${featuredImage?.image.transcoded_file || featuredImage?.image.original_file}`} className="rounded-md object-cover w-full h-full" />
+                    : null
+                  }
                 </AspectRatio>
               </TableCell>
               <TableCell className="flex-[1] sm:table-cell">
@@ -249,12 +257,6 @@ const ORDER_DRAFT_PAYMENT_METHOD = "order-draft-payment-method"
 function useOrderSession({ orderRoute }: { orderRoute: string }) {
   const { fetch } = useAuthFetch()
   const client = useQueryClient()
-
-  const resetSesssion = useCallback(() => {
-    client.invalidateQueries({ queryKey: [ORDER_DRAFT_SESSION] })
-    client.invalidateQueries({ queryKey: [ORDER_DRAFT_CART_CONVERSATION] })
-    client.invalidateQueries({ queryKey: [ORDER_DRAFT_PAYMENT_METHOD] })
-  }, [client])
 
   const model = useQuery({
     queryKey: [ORDER_DRAFT_SESSION],
@@ -307,7 +309,7 @@ function useOrderSession({ orderRoute }: { orderRoute: string }) {
 }
 
 export default function CheckoutIndex() {
-  const { stripePubkey, paymentRoute, orderRoute } = useLoaderData<typeof loader>()
+  const { stripePubkey, paymentRoute, orderRoute, objectStoreRoute } = useLoaderData<typeof loader>()
 
   const { model, mutatePaymentMethod, cartConversationToOrder } = useOrderSession({ orderRoute })
 
@@ -346,7 +348,9 @@ export default function CheckoutIndex() {
         {provider &&
           <section>
             {model.data.order.order_items && model.data.order.order_items.length > 0
-              ? <div className="flex flex-col gap-2" >{model.data.order.order_items.map(OrderItemView)}</div>
+              ? <div className="flex flex-col gap-2" >{model.data.order.order_items.map(item =>
+                <OrderItemView objectStoreRoute={objectStoreRoute} {...item} />
+              )}</div>
               : <h1>Not found items. Add items to cart first!</h1>
             }
             {(() => {
