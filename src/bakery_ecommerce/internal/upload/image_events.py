@@ -29,3 +29,14 @@ class SubmitImageUploadEvent(ContextPersistenceEvent):
     @property
     def payload(self) -> Self:
         return self
+
+
+@dataclass
+@impl_event(ContextEventProtocol)
+class SetFeaturedProductImageEvent(ContextPersistenceEvent):
+    product_id: UUID
+    image_id: UUID
+
+    @property
+    def payload(self) -> Self:
+        return self

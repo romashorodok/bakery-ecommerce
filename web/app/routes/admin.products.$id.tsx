@@ -7,6 +7,7 @@ import { createRef, FormEvent, useEffect, useState } from "react"
 import { Button } from "~/components/ui/button"
 import { FileUploader } from "~/components/upload"
 import { cn } from "~/lib/utils"
+import { useMutation } from "@tanstack/react-query"
 
 export const loader = async (loader: LoaderFunctionArgs) => {
   await sessionProtectedLoader(loader)
@@ -57,6 +58,26 @@ export default function AdminProductsById() {
       setData(result)
     })()
   }, [model.data])
+
+  const mutationMakeFeaturedImage = useMutation({
+    mutationKey: ["make-featured-image"],
+    mutationFn: async ({ product_id, image_id }: { product_id: string, image_id: string }) => {
+      const response = await fetch(`${loaderData.imageRoute}/${image_id}/featured`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ product_id })
+      })
+      if (!response || !response.ok) throw new Error("Something goes wrong...")
+      return response.json<{ success: boolean }>()
+    }
+  })
+
+  function submitFeaturedImage(e: FormEvent<HTMLFormElement>, params: { product_id: string, image_id: string }) {
+    e.preventDefault()
+    mutationMakeFeaturedImage.mutateAsync(params)
+  }
 
   if (model.isLoading) {
     return <div>
@@ -119,16 +140,25 @@ export default function AdminProductsById() {
         <ul>
           {data.product.product_images.map(product_image => (
             <li>
+              <h1>
+                Is featured: {JSON.stringify(product_image.featured)}
+              </h1>
               <img className={cn(
                 "w-[440px] h-[247px]"
               )}
                 src={`${loaderData.objectStoreRoute}/${product_image.image.bucket}/${product_image.image.transcoded_file || product_image.image.original_file}`} />
+              <form onSubmit={(e) => submitFeaturedImage(e, {
+                product_id: product_image.product_id,
+                image_id: product_image.image_id,
+              })}>
+                <Button type="submit">Make featured</Button>
+              </form>
             </li>
           ))}
         </ul>
 
         <FileUploader product_id={data.product.id} imageRoute={loaderData.imageRoute} />
-      </div>
+      </div >
     )
   }
 }

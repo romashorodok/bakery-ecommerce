@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 from uuid import uuid4
 import uuid
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import case
 
 from nats.aio.client import Client as NATS
 
@@ -13,6 +14,7 @@ from bakery_ecommerce.internal.store.persistence.product import ProductImage
 from bakery_ecommerce.internal.store.query import QueryProcessor
 from bakery_ecommerce.internal.upload.image_events import (
     GetPresignedUrlEvent,
+    SetFeaturedProductImageEvent,
     SubmitImageUploadEvent,
 )
 from bakery_ecommerce.internal.upload.store.image_model import Image
@@ -108,3 +110,30 @@ class SubmitImageUpload:
         )
 
         return SubmitImageUploadResult(product_image)
+
+
+@dataclass
+class SetFeaturedProductImageResult:
+    success: bool
+
+
+class SetFeaturedProductImage:
+    def __init__(self, queries: QueryProcessor) -> None:
+        self.__queries = queries
+
+    async def execute(self, params: SetFeaturedProductImageEvent):
+        async def query(session: AsyncSession):
+            stmt = (
+                update(ProductImage)
+                .where(ProductImage.product_id == params.product_id)
+                .values(
+                    featured=case(
+                        (ProductImage.image_id == params.image_id, True), else_=False
+                    )
+                )
+            )
+            result = await session.execute(stmt)
+            return result.rowcount > 0
+
+        result = await self.__queries.process(params.session, CustomBuilder(query))
+        return SetFeaturedProductImageResult(result)

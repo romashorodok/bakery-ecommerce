@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from typing import Annotated, Any, Self
+from typing import Annotated, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -9,18 +8,19 @@ from nats.aio.client import Client as NATS
 from bakery_ecommerce.composable import Composable, set_key
 from bakery_ecommerce.context_bus import (
     ContextBus,
-    ContextEventProtocol,
     ContextExecutor,
-    impl_event,
 )
 from bakery_ecommerce.internal.store.query import QueryProcessor
 from bakery_ecommerce.internal.upload.image_events import (
     GetPresignedUrlEvent,
+    SetFeaturedProductImageEvent,
     SubmitImageUploadEvent,
 )
 from bakery_ecommerce.internal.upload.image_use_case import (
     GetPresignedUrl,
     GetPresignedUrlResult,
+    SetFeaturedProductImage,
+    SetFeaturedProductImageResult,
     SubmitImageUpload,
 )
 from bakery_ecommerce.object_store import ObjectStore
@@ -94,6 +94,43 @@ async def submit_image_upload(
     )
     await context.gather()
     return {"success": True}
+
+
+def make_featured_image_request_context_bus(
+    context: ContextBus = Depends(dependencies.request_context_bus),
+    queries: QueryProcessor = Depends(dependencies.request_query_processor),
+) -> ContextBus:
+    _set_featured_product_image = SetFeaturedProductImage(queries)
+
+    return context | ContextExecutor(
+        SetFeaturedProductImageEvent, _set_featured_product_image.execute
+    )
+
+
+class MakeFeaturedImageRequestBody(BaseModel):
+    product_id: str
+
+
+@api.put("/{image_id}/featured", dependencies=[Depends(verify_access_token)])
+async def make_featured_image(
+    image_id: str,
+    body: MakeFeaturedImageRequestBody,
+    context: Annotated[ContextBus, Depends(make_featured_image_request_context_bus)],
+):
+    await context.publish(
+        SetFeaturedProductImageEvent(
+            image_id=UUID(image_id),
+            product_id=UUID(body.product_id),
+        )
+    )
+
+    result = await context.gather()
+    cmp = Composable(dict[str, Any]())
+    cmp.reducer(
+        SetFeaturedProductImageResult,
+        lambda resp, result: set_key(resp, "success", result.success),
+    )
+    return cmp.reduce(result.flatten())
 
 
 def register_handler(router: APIRouter):
