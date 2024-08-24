@@ -1,42 +1,25 @@
 import { useLoaderData, useNavigate } from '@remix-run/react';
 import { LoaderFunctionArgs, json } from '@remix-run/cloudflare';
 import { loadStripe } from '@stripe/stripe-js';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthFetch } from '~/hooks/useAuthFetch';
 
 import { Label } from "~/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
 import { AspectRatio } from "~/components/ui/aspect-ratio"
 import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
 } from "~/components/ui/table"
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
-import {
-  MoreHorizontal,
-  PlusCircle,
-} from "lucide-react"
 import { Elements } from "@stripe/react-stripe-js";
 import {
   PaymentElement,

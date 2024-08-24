@@ -169,7 +169,7 @@ export default function AdminProductsById() {
           ))}
         </ul>
 
-        <FileUploader product_id={data.product.id} imageRoute={loaderData.imageRoute} />
+        <FileUploader onSuccess={() => client.invalidateQueries({ queryKey: ["product"] })} product_id={data.product.id} imageRoute={loaderData.imageRoute} />
       </div >
     )
   }

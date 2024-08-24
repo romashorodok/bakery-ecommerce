@@ -49,7 +49,7 @@ async function imageHash(image: File) {
 //   return hashHex;
 // }
 
-export function FileUploader({ product_id, imageRoute }: { product_id: string, imageRoute: string }) {
+export function FileUploader({ product_id, imageRoute, onSuccess }: { product_id: string, imageRoute: string, onSuccess: () => void }) {
   const imageRef = createRef<HTMLImageElement>()
   const [image, setImage] = useState<File | undefined>()
   const { fetch } = useAuthFetch()
@@ -83,6 +83,7 @@ export function FileUploader({ product_id, imageRoute }: { product_id: string, i
           product_id,
         })
       })
+      onSuccess()
       return { success: true }
     }
   })

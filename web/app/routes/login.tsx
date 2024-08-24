@@ -3,6 +3,20 @@ import { ActionFunctionArgs, LoaderFunctionArgs, redirect } from "@remix-run/ser
 import { useEffect } from "react"
 import { AppContext } from "~/root"
 import { commitSession, getSession } from "~/session.server"
+import { z } from 'zod';
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Button } from "~/components/ui/button"
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "~/components/ui/form"
+import { Input } from "~/components/ui/input"
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const session = await getSession(request.headers.get("Cookie"))
@@ -66,11 +80,26 @@ export const action = async ({ context: { cloudflare }, request }: ActionFunctio
   })
 }
 
+const formSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(4).max(32),
+})
+
 export default function Login() {
   const fetcher = useFetcher<typeof action>()
   const { errors } = useLoaderData<typeof loader>()
 
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+  })
+
   const { setAccessToken } = useOutletContext<AppContext>()
+
+  function onSubmit(values: z.infer<typeof formSchema>) {
+    fetcher.submit(values, {
+      method: 'POST',
+    })
+  }
 
   useEffect(() => {
     if (fetcher.data?.access_token) {
@@ -82,15 +111,40 @@ export default function Login() {
   return (
     <>
       {errors && <h1>Login has error {JSON.stringify(errors)}</h1>}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Email</FormLabel>
+                <FormControl>
+                  <Input placeholder="email" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-      <div>Hello world</div>
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>password</FormLabel>
+                <FormControl>
+                  <Input placeholder="password" type="password" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-      <fetcher.Form method="POST">
-        <input type="email" name="email"></input>
-        <input type="password" name="password"></input>
+          <Button type="submit">Submit</Button>
+        </form>
+      </Form>
 
-        <button>Log In!</button>
-      </fetcher.Form>
     </>
   )
 }

@@ -1,39 +1,18 @@
 import { json, LoaderFunctionArgs } from "@remix-run/cloudflare"
-import { Link, useLoaderData, useNavigate } from "@remix-run/react"
+import { Link, useLoaderData } from "@remix-run/react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useAuthFetch } from "~/hooks/useAuthFetch"
 import { sessionProtectedLoader } from "~/session.server"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from "~/components/ui/card"
 import { Button } from "~/components/ui/button"
 import {
-  ChevronLeft,
-  ChevronRight,
-  Copy,
-  CreditCard,
-  File,
-  Home,
-  LineChart,
-  ListFilter,
-  MoreVertical,
-  Package,
-  Package2,
-  PanelLeft,
-  Search,
-  Settings,
-  ShoppingCart,
-  Truck,
-  Users2,
-} from "lucide-react"
-import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -45,13 +24,10 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
-  TableHeader,
   TableRow,
 } from "~/components/ui/table"
 import {
   MoreHorizontal,
-  PlusCircle,
 } from "lucide-react"
 import { Separator } from "~/components/ui/separator"
 import { useResponsive } from "~/hooks/useResponsive"
