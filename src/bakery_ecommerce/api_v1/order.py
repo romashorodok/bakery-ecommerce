@@ -3,6 +3,7 @@ from typing import Annotated, Any, Self
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+import json
 
 from bakery_ecommerce.composable import Composable, set_key
 from bakery_ecommerce.context_bus import (

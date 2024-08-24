@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Sequence, TypedDict
 from uuid import UUID
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -46,8 +46,7 @@ class Customer:
     email: str
 
 
-@dataclass
-class OrderWithCustomer:
+class OrderWithCustomer(TypedDict):
     order: dict[str, Any]
     customer: Customer | None
 
@@ -82,8 +81,8 @@ class GetOrders:
 
             orders_with_customers.append(
                 OrderWithCustomer(
-                    order.to_dict(),
-                    customer,
+                    order=order.to_dict(),
+                    customer=customer,
                 )
             )
 
