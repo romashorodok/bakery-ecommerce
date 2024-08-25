@@ -1,7 +1,6 @@
 from uuid import UUID
-from sqlalchemy.orm import Mapped, MappedColumn, mapped_column, relationship
+from sqlalchemy.orm import MappedColumn, mapped_column
 from bakery_ecommerce.internal.store.persistence.base import PersistanceBase
-from bakery_ecommerce.internal.store.persistence.catalog import Catalog
 
 
 class FrontPage(PersistanceBase):

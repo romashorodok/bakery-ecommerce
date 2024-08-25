@@ -1,5 +1,8 @@
+networks:
+  - bridge:
 
 services:
+  # TODO: Add pgbouncer
   postgres:
     image: postgres:16.3-alpine3.20 
     environment:
@@ -24,3 +27,8 @@ services:
     command: server --console-address ":9001" /data
     volumes:
       - "/data"
+  traefik:
+    image: traefik:v3.1.2
+    ports:
+      - 443:443
+    

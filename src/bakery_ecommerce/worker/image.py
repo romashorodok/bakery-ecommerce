@@ -2,8 +2,6 @@ import asyncio
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 from nats.aio.msg import Msg
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from bakery_ecommerce.internal.store.crud_queries import CrudOperation
 from bakery_ecommerce.internal.store.query import QueryProcessor

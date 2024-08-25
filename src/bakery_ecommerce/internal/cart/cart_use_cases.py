@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Any
 
 from sqlalchemy import and_, delete, select
 from sqlalchemy.exc import NoResultFound

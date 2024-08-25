@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Any, Sequence, TypedDict
 from uuid import UUID
 from fastapi import HTTPException
-from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession

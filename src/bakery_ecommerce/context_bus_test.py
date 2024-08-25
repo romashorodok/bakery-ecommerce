@@ -75,6 +75,7 @@ async def test_context_executors_with_dynamic_spawn():
         return num
 
     bus = ContextBus(
+        None,
         {
             str(CustomPayloadCreated): [
                 ContextExecutor(
@@ -89,7 +90,7 @@ async def test_context_executors_with_dynamic_spawn():
                     CustomPayloadRead, lambda payload: return_task(payload.value)
                 ),
             ],
-        }
+        },
     )
 
     num = await num_gen.get_next()
