@@ -83,7 +83,7 @@ class AsyncCrud(Generic[AsyncCrud_T]):
 
     async def update_partial(
         self, id_field: str, id_value: Any, fields: dict[str, Any]
-    ) -> AsyncCrud_T | None:
+    ) -> AsyncCrud_T:
         if id_field in fields:
             del fields[id_field]
         stmt = (
@@ -93,7 +93,10 @@ class AsyncCrud(Generic[AsyncCrud_T]):
             .returning(self.__model)
         )
         result = await self.__session.execute(stmt)
-        return result.unique().scalar_one_or_none()
+        result = result.unique().scalar_one_or_none()
+        if not result:
+            raise ValueError(f"Column {id_field} not found on {self.__model}.",)
+        return result
 
     async def remove_by_field(self, field: str = "id", value: Any = Any) -> bool:
         stmt = delete(self.__model).where(getattr(self.__model, field) == value)

@@ -319,7 +319,7 @@ export default function CheckoutIndex() {
   if (model.data?.order) {
     return (
       <div>
-        <h1>{JSON.stringify(model.data?.order)}</h1>
+        { /* <h1>{JSON.stringify(model.data?.order)}</h1> */}
         <RadioGroup onValueChange={(e) => setProvider(e as PAYMENT_PROVIDER_KEY)} >
           {Object.keys(PAYMENT_PROVIDER).map(item =>
             <div key={`radio-group-${item}`} className="flex items-center space-x-1">
