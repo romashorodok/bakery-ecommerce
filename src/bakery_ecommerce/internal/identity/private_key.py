@@ -5,10 +5,6 @@ from cryptography.hazmat.primitives import serialization
 
 from joserfc import jwk
 from joserfc.rfc7517 import types as rfc7517_types
-from joserfc.rfc8812 import register_secp256k1
-
-
-register_secp256k1()
 
 
 class PrivateKeyES256K1:
